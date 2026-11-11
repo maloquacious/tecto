@@ -1,249 +1,206 @@
-# Tectonics.js → Go CLI port plan
+# tecto plan
 
-## Recommendation
+## Purpose
 
-Build **`tecto`**, a native, CPU-only Go command-line simulator.
-Port the numerical engine in dependency order, using the original JavaScript as a differential-test reference.
-Deliver tectonic evolution and reproducible checkpoints first; add the coupled climate, biosphere, and orbital models afterward.
-Do not translate the browser application file for file.
+`tecto` simulates plate tectonics on a sphere and returns the resulting elevation.
+It is a Go package with a small command-line program around it.
+Its one customer is the world map generator in [hamwold](https://github.com/mdhender/hamwold) (`internal/worldgen`), which is expected to import the package.
+Shared code of this kind lives in the `maloquacious` organization.
 
-Assumptions: the target is a standalone Go binary, not a terminal globe viewer or a wrapper around a JavaScript runtime.
-The eventual scope is the source project's implemented simulation behavior, not just a terrain generator.
-The first useful release deliberately covers a smaller tectonics-only slice.
+The algorithms come from the lithosphere model of [tectonics.js](https://github.com/davidson16807/tectonics.js), read at commit `e43927ce88e766b63e35e896f36bfb882a4c8de4` (August 22, 2020).
+The JavaScript is a description of the algorithms, not a reference to match.
+Nothing here is tested against it, and its limits and shortcuts are not preserved.
 
-The local workspace was empty at inspection.
-This is a plan, not an implementation or a newly initialized repository.
+### In scope
 
-## Inspected baseline and feasibility
+- An icosahedral grid on a sphere, and the field operations the model needs on it.
+- A seeded initial crust.
+- Plates: segmentation, rigid motion, merging, rifting, subduction, and accretion.
+- Erosion.
+- Isostatic elevation and a sea level.
+- Sampling the sphere onto hamwold's hex map.
+- A command that runs the package and writes the result to a file, for inspection.
 
-Inspected upstream `master` at [e43927ce88e766b63e35e896f36bfb882a4c8de4](https://github.com/davidson16807/tectonics.js/commit/e43927ce88e766b63e35e896f36bfb882a4c8de4), whose latest commit is dated August 22, 2020.
-Pin this revision rather than allowing the reference implementation to move during the port.
+### Out of scope
 
-Important source boundaries:
+- Matching tectonics.js output for any seed.
+- Climate, hydrosphere, biosphere, stars, and orbits. Hamwold has its own temperature and moisture.
+- Rendering beyond a debug image, interactive display, and intermediate results.
+- Saving and resuming a run. A run is cheap enough to repeat from its seed.
 
-| Source | Responsibility | Go treatment |
-| --- | --- | --- |
-| [`precompiled/rasters/`](https://github.com/davidson16807/tectonics.js/tree/e43927ce88e766b63e35e896f36bfb882a4c8de4/precompiled/rasters) | Grid topology, nearest-cell lookup, matrices, typed fields, diffusion, morphology, transport, scratch buffers | Port the subset reachable from simulation and supported exports; expand as needed |
-| [`noncompiled/academics/`](https://github.com/davidson16807/tectonics.js/tree/e43927ce88e766b63e35e896f36bfb882a4c8de4/noncompiled/academics) | Physical and geometric calculations | Ordinary Go functions, separated from state orchestration |
-| [`noncompiled/generators/CrustGenerator.js`](https://github.com/davidson16807/tectonics.js/blob/e43927ce88e766b63e35e896f36bfb882a4c8de4/noncompiled/generators/CrustGenerator.js) | Height distributions and rock-column initialization | Native seeded generation |
-| [`noncompiled/models/lithosphere/`](https://github.com/davidson16807/tectonics.js/tree/e43927ce88e766b63e35e896f36bfb882a4c8de4/noncompiled/models/lithosphere) | Crust, plates, motion, erosion, reactions, rifting, subduction, supercontinent cycle | First simulation milestone |
-| [`noncompiled/models/World.js`](https://github.com/davidson16807/tectonics.js/blob/e43927ce88e766b63e35e896f36bfb882a4c8de4/noncompiled/models/World.js) and submodels | Coupled lithosphere, hydrosphere, atmosphere, biosphere | Typed world state and explicit initialization/update order |
-| [`noncompiled/models/universe/`](https://github.com/davidson16807/tectonics.js/tree/e43927ce88e766b63e35e896f36bfb882a4c8de4/noncompiled/models/universe) | Stars, orbital/spin cycles, insolation | Later full-model milestone |
-| [`noncompiled/models/Simulation.js`](https://github.com/davidson16807/tectonics.js/blob/e43927ce88e766b63e35e896f36bfb882a4c8de4/noncompiled/models/Simulation.js) | Wall-clock-driven stepping, RNG, simulation metadata | Replace timing with explicit simulated-time stepping |
-| [`noncompiled/file-io/`](https://github.com/davidson16807/tectonics.js/tree/e43927ce88e766b63e35e896f36bfb882a4c8de4/noncompiled/file-io) | JSON saves, CSV, image import | Native checkpoints and CSV first; legacy import and image handling later |
-| Views, controls, Vue, jQuery, WebGL shaders | Interactive application and rendering | Do not port; optional static maps are a separate feature |
+## What this is for, and what it is not
 
-The model uses CPU-side JavaScript field operations; WebGL is not required for tectonic calculations.
-However, Three.js is not entirely presentation-only: it constructs the simulation mesh and a fixed detail-4 coarse mesh inside `FluidMechanics.js`.
+Hamwold's default map is 1,920 by 800 hexes of 25 km: 1,536,000 hexes.
+The model's cells are far larger than a hex.
 
-**Executed feasibility probe:** loaded the vendored Three.js geometry code, compiled raster bundle, and tectonics dependencies into a Node VM, with `self` aliased to the VM global.
-No DOM or WebGL renderer was needed.
-On a detail-3 grid, seeds 42 and 43 for terrain ranking and height sampling, and twelve 0.1-Myr steps using the upstream lithosphere-test dependency configuration, the model ended with two plates, zero nonfinite crust entries, and approximately −1.18% drift in the source's average conserved-crust metric.
-This is a smoke baseline, not a full upstream test run, browser-world reproduction, performance benchmark, or scientific validation.
+| Detail | Cells   | Area per cell | Hexes per cell | Cell spacing |
+| ------ | ------- | ------------- | -------------- | ------------ |
+| 5      | 10,242  | ~49,800 km²   | ~92            | ~240 km      |
+| 6      | 40,962  | ~12,450 km²   | ~23            | ~120 km      |
+| 7      | 163,842 | ~3,100 km²    | ~6             | ~60 km       |
 
-Measured mesh sizes from the vendored Three.js implementation:
+So `tecto` supplies the shape of the world at 250 km and up: where the continents are, and where the high ground runs.
+Hamwold keeps supplying everything finer, from its own noise.
 
-| Detail | Vertices/cells | Triangle faces |
-| --- | --- | --- |
-| 0 | 12 | 20 |
-| 3 | 642 | 1,280 |
-| 4 | 2,562 | 5,120 |
-| 5, browser default | 10,242 | 20,480 |
-| 6, browser cap | 40,962 | 81,920 |
+The reason to do this at all is one open item in hamwold's `docs/terrain.md`: mountains come out as massifs, not ranges, because the height field has no direction to it.
+A plate model gives the high ground a direction, because crust thickens along the margins where plates converge.
 
-## Product contract
+At time zero the model offers nothing hamwold lacks.
+Its initial terrain is random cuts ranked onto a height curve, which is what hamwold's `fracture` and `ranks` already do.
+All the value is in running the plates, and that is not yet known to be enough: see the decision point under Milestones.
 
-### First useful release: tectonics core
+## The interface to hamwold
 
-- Generate a spherical crust from a seed and resolution.
-- Initialize and evolve plates, including erosion, weathering, lithification, metamorphosis, accretion, rifting, and subduction.
-- Use the native hydrology sea-level calculation for the generated displacement field; do not make the upstream test's artificial deep sea level the production default.
-- Advance by a specified timestep and count, independent of machine speed.
-- Save and resume complete native state.
-- Export per-cell coordinates, elevation, plate assignment, crust age, and selected rock quantities as CSV.
-- Report numerical diagnostics and nonfinite values rather than silently producing unusable output.
+`tecto` replaces one call in hamwold: the `g.fracture(...)` that builds `height` in `worldgen.Generate`.
+Everything after it stays: hamwold floods the field to its own land fraction, ranks the land onto its own elevation curve, and derives landforms and climate.
+Hamwold therefore uses only the ordering of `tecto`'s heights, not its metres or its sea level.
 
-Temperature and precipitation are not available in tectonics-only mode.
-The CLI must not fill those columns with plausible-looking fabricated values.
+The package returns one height per hex, in hamwold's layout:
 
-### Full-model follow-up
+- Flat-top hexes in odd-q offset coordinates, indexed `row*columns + column`, row 0 at the north edge.
+- Latitude is linear in the row, as in hamwold's `grid.latitude`: an odd column sits half a row lower.
+- Longitude is linear in the column, and the map wraps east to west.
+- A height is in metres relative to the model's sea level, as `float32`.
 
-Add the source's atmosphere, snow/ocean coverage, vegetation diagnostics, stars, orbital/spin cycles, and insolation.
-Support the original six-column world CSV: latitude, longitude, elevation, plate, temperature, precipitation.
-Keep clear that several source models are simplified diagnostics rather than full dynamic solvers: hydrosphere change methods do not evolve water transport, biosphere change methods are empty, precipitation is a latitude-based estimate, and the active albedo path uses a constant value.
+Each hex takes its height by interpolating between the three cells of the grid triangle that contains it, not from the nearest cell.
+Nearest-cell sampling would give hamwold terraces five hexes wide with cliffs between them.
 
-### Excluded from initial scope
+The sphere is rotated before sampling so the largest landmass is centred on the equator at the middle column.
+This does the job of hamwold's `centeringSlide`, and a rotated sphere has no seam.
 
-Interactive 3D display, terminal animation, photorealistic rendering, generated names, arbitrary plugins, GPU acceleration, distributed simulation, alternative tectonic physics, and numerical-method improvements.
-Heightmap import, static PNG maps, and legacy browser-save import are follow-up features, not prerequisites for the core port.
+The package's entry point takes the parameters (seed, simulated time, detail, columns, rows) and returns the heights with a summary of the run.
+It reads and writes nothing, so hamwold's `worldgen.Generate` stays a pure function of its parameters.
 
-## Proposed CLI
+The command writes the same heights to a file: a small header (magic, version, columns, rows, seed, detail, simulated time) followed by the heights, little-endian.
+It writes a debug PNG of the raster on request.
 
-Illustrative interface; these commands do not exist yet:
+## The model
 
-```sh
-tecto generate --seed 42 --resolution 4 --output world.tecto.json
-tecto run --input world.tecto.json --dt-myr 0.1 --steps 1000 --output evolved.tecto.json
-tecto inspect --input evolved.tecto.json
-tecto export --input evolved.tecto.json --format csv --output cells.csv
-```
+Each cell holds a column of rock: the mass of each rock type per square metre, and the crust's age.
+Elevation is never stored. It is derived from the column.
 
-Keep configuration separate from checkpoints.
-Configuration describes desired initial conditions; checkpoints contain the exact state required to continue an existing run.
-Add configuration files when the parameter set outgrows practical flags, using a versioned JSON schema and documented units.
+| Step | What it does | Read from |
+| ---- | ------------ | --------- |
+| Grid | Subdivided icosahedron: positions, neighbours, cell areas, nearest-cell and containing-triangle lookup | `precompiled/rasters/Grid.js`, `VoronoiSphere.js` |
+| Field operations | Gradient, diffusion, binary dilation and erosion, flood fill | `precompiled/rasters/` |
+| Initial heights | The sum of many random smoothed half-space cuts of the sphere, as a rank | `SphericalGeometry.get_random_surface_field` |
+| Initial crust | Ranks mapped to a two-humped height distribution (ocean floor and continent), then to rock columns by height | `CrustGenerator.js` |
+| Thickness and density | Thickness from each pool's mass and density; ocean crust grows denser with age over 250 Myr | `Crust.get_thickness`, `get_density` |
+| Elevation | Isostasy: `thickness × (1 − density / mantle density)` | `FluidMechanics.get_isostatic_displacements` |
+| Sea level | The level at which the ocean holds a fixed volume, by bisection | `Hydrology.solve_sealevel` |
+| Plate segmentation | Smooth the crust's buoyancy into a pressure field, take its gradient as mantle flow, and flood-fill regions of like flow into at most seven plates | `Lithosphere.resetPlates`, `Tectonophysics.guess_plate_map`, `VectorImageAnalysis.js` |
+| Plate velocity | Dense crust at a plate's edge pulls the plate toward that edge; the pulls are averaged into one rotation for the rigid plate | `Tectonophysics.guess_plate_velocity`, `get_plate_rotation_matrix3x3` |
+| Plate motion | Each plate keeps its crust in its own frame and a rotation to the world frame | `Plate.js` |
+| Merge | Build the world's crust from the plates. Where plates overlap, the least dense is on top, and continental rock from all of them stacks | `merge_plates_to_master`, `Crust.overlap` |
+| Rifting | Where plates have parted, the gap fills with new ocean crust, joined to the plate beside it | `update_rifting` |
+| Subduction | Where a plate lies under another and is denser than the mantle, its edge is removed. Its continental rock is added to the plate above | `update_subducted` |
+| Erosion | Rock moves from a cell to each lower neighbour, in proportion to the drop | `Crust.model_erosion` |
+| Supercontinent cycle | Every 150 Myr the plates are discarded and segmented afresh from the current crust | `SupercontinentCycle.js` |
 
-- Diagnostics/progress go to stderr; requested machine-readable output goes to stdout or an explicit file.
-- Reject invalid resolutions, nonpositive timesteps, negative step counts, malformed state, and incompatible schema versions before advancing.
-- Treat `--dt-myr` as a floating-point count of simulated megayears, converted to seconds internally.
-  Geological intervals do not fit Go's nanosecond-based `time.Duration`.
-- An interrupt should stop at a completed step and preserve a valid checkpoint; use temporary-file replacement for saves.
-- Report the seed, mesh size, elapsed simulated time, timestep, model mode, and schema/model version.
-- Start with standard-library subcommand parsing.
-  Do not add a CLI framework unless the actual interface needs one.
+Mountains come from two of these steps: continental rock stacking where plates overlap, and accretion above a subducting edge.
+Both act along plate margins, which is what makes ranges.
 
-## Go architecture
+The rock reactions (weathering, lithification, metamorphosis) are left out to begin with.
+They move mass between rock types of similar density, so they change elevation little, and upstream has weathering switched off.
+They are added only if a measured run shows the lack.
 
-Use Go 1.26 as the initial toolchain baseline, matching the installed 1.26.4 toolchain.
-Confirm the minimum supported version before implementation and apply the Modern Go Guidelines tooling when writing Go.
+## Departures from upstream
+
+These are decided now, because nothing obliges the Go to repeat them.
+
+- **Integer widths.** Cell and plate ids are `int32`. Upstream's `Uint16` ids cap the grid at detail 6.
+- **Lengths, not cell counts.** Upstream dilates plate edges by 5 cells and drops plates under 200 cells, at a default detail of 5. Those become about 1,200 km and 10 million km², so the model behaves alike at any detail. Smoothing for the pressure field becomes a length too, replacing upstream's fixed detail-4 side grid.
+- **The timestep is internal.** Upstream rifts and subducts one ring of cells per step, whatever the step's length. `tecto` picks its own step so the fastest plate moves less than one cell, and the caller gives only the total time.
+- **Random numbers.** `math/rand/v2` PCG, with a separate stream for each use, derived from the seed. Hamwold can pass a seed drawn from its own domains.
+- **Arithmetic.** `float64` for calculation; `float32` only for stored fields if memory calls for it.
+- **Plate velocity.** Upstream calls its own velocity model mostly wrong, and negates a rotation without knowing why. Implement it as written first, since it is known to produce moving plates, then fix the sign by derivation and test.
+- **A plain copy bug.** Upstream's `RockColumn` sets `mafic_plutonic` from `mafic_volcanic`, so new ocean crust is doubled. Not repeated.
+- **No caches.** Upstream's `Memo` and its display-speed thresholds exist for the browser. Derived fields are recomputed where they are needed, in a fixed order.
+
+## Layout
 
 ```text
-cmd/tecto/              CLI parsing and process lifecycle
-internal/grid/         Icosahedral mesh, topology, spatial lookup
-internal/field/        Scalar/vector operations, morphology, transport
-internal/physics/      Geometry and numerical physical calculations
-internal/model/        Crust, plates, world, stepping; later coupled models
-internal/generate/     Seeded initialization and source-compatible RNG
-internal/state/        Versioned checkpoints and CSV exports
-internal/reference/    Development-only JS harness and fixture tooling
-testdata/              Small, attributed differential fixtures
+tecto.go            the public package: parameters, Generate, the result
+version.go          the version
+cmd/tecto/          flags, calling the package, writing files
+internal/sphere/    grid, lookups, field operations
+internal/crust/     rock columns, thickness, density, isostasy, sea level
+internal/plates/    segmentation, velocity, motion, merge, rifting, subduction
+internal/erosion/   erosion
+internal/hexmap/    rotation and sampling to the hex raster
 ```
 
-These are ownership boundaries, not a requirement to create every directory on day one.
-Keep model subcomponents together until splitting them removes real complexity.
-Use concrete types, not an interface hierarchy matching the JavaScript constructors.
-Runtime Go binaries must not depend on Node, npm, a browser, C preprocessing, GLSL translation, or Three.js.
+The public surface is the root package and nothing else.
+Everything under `internal/` can change freely; the root package's exported names are a promise to hamwold.
+Packages are split when a boundary has earned it, not before.
 
-Simulation step order initially follows the source: invalidate derived fields, calculate deltas, then apply them.
-Within lithosphere application, preserve integration → plate movement → supercontinent-cycle update → merge → rifting → subduction, including the source's delayed accretion contribution.
-Eagerly recomputing everything or rearranging these stages can change results.
+The command uses the standard `flag` package.
+It moves to `github.com/peterbourgon/ff/v4`, which hamwold uses, only if the standard package becomes an obstacle.
 
-## Compatibility decisions to settle early
+## Command line
 
-### 1. Numeric precision
+```sh
+tecto --seed 42 --myr 300 --detail 6 --columns 1920 --rows 800 --output world.tecto
+tecto --seed 42 --myr 300 --png world.png
+```
 
-JavaScript scalar arithmetic is double precision, while writes to `Float32Array` round to float32.
-A literal Go translation using float32 for all arithmetic will not match that behavior.
+- `--myr` is the simulated time. Zero writes the initial crust.
+- Progress and a summary go to stderr: plates, land fraction, height percentiles, and elapsed time.
+- A run that produces a non-finite value, or loses a plate's crust, fails with a message. It does not write a file.
+- The command holds no logic of its own. Anything it can do, the package can do.
 
-Store raster and crust fields as float32 initially, retain double-precision intermediate arithmetic where the JavaScript does, and reproduce material rounding boundaries.
-Preserve the source's eight crust channels and contiguous channel layout; vector fields use separate component arrays.
-Document which operations allow input/output aliasing, since in-place operations are common upstream.
-Do not optimize allocations or parallelize reductions before parity is characterized.
+## Verification
 
-### 2. Mesh identity and traversal order
+With no reference to compare against, each layer needs its own definition of correct.
 
-Matching the cell count is insufficient.
-Vertex numbering, face order, ascending neighbor traversal, coordinate convention (Y-up and longitude from `atan2(-z, x)`), nearest-cell tie breaking, matrix layout, and segmentation ties affect simulation output.
+| Layer | Check |
+| ----- | ----- |
+| Grid | V − E + F = 2. Exactly 12 cells have five neighbours and the rest six. Adjacency is mutual. Cell areas sum to 4π. |
+| Lookups | Nearest cell and containing triangle agree with a brute-force search on random points. |
+| Field operations | The gradient of a field linear in x is the tangent part of the x axis. Diffusion keeps the area-weighted mean and lowers the variance. Dilation then erosion contains the original set. |
+| Crust | Thickness and elevation match hand-worked columns. Uniform crust gives uniform elevation. |
+| Sea level | The ocean's volume at the solved level is the volume asked for. |
+| Sampling | A field equal to latitude samples to hamwold's `grid.latitude` for every hex. The raster is continuous across the east–west wrap. |
+| Segmentation | Every cell is in exactly one plate. Each plate is connected and no smaller than the minimum. |
+| Motion | Rotations stay orthonormal. A plate rotated by a known angle keeps its area and moves its centre by that angle. |
+| Merge, rifting, subduction | After a step every cell has crust. No mass is negative. Continental mass changes only by the amounts the step reports as created or destroyed. |
+| Erosion | Mass is conserved exactly. An isolated peak gets lower and its neighbours higher. A flat field does not change. |
+| Whole run | The same seed gives the same file, byte for byte. Land fraction and height percentiles stay in stated ranges across twenty seeds. |
+| Ranges | High ground is nearer to convergent margins than land in general is. High ground is elongated: its connected regions are longer than they are wide. |
 
-Use exported JavaScript meshes as fixtures before implementing native mesh generation.
-Match the vendored Three.js subdivision, normalization, and vertex-merging behavior rather than substituting an arbitrary icosphere implementation.
-Preserve the fixed detail-4 coarse grid in the fluid-pressure calculation.
-Use deterministically ordered slices rather than Go map iteration in numerical loops.
+The last row is the test that the tectonics are doing their job.
+The two measures are computed by a test helper and reported in the run summary, so they can be tracked as the model changes.
 
-Keep cell IDs wide enough in Go to avoid accidental overflow, but restrict compatibility mode to source-supported resolutions 0–6.
-The source uses uint16 cell IDs and uint8 plate IDs, with sentinel values including 65535 and 255.
-Supporting larger meshes or more plates is a separate change, not a free consequence of choosing wider Go integers.
+## Milestones
 
-### 3. Randomness and seed semantics
+Each one ends with something that runs.
 
-The bundled RNG is a Mersenne Twister implementation with its own initialization, uniform and normal sampling, and a cached second normal sample.
-Go's default RNG will not generate matching planets.
+1. **The pipe.** Grid, lookups, initial crust, isostasy, sea level, rotation, sampling, file, and PNG.
+   Hamwold gains a way to use `tecto`'s heights in place of `fracture`, behind a flag.
+   *Done when* `hw map` renders a `tecto` world at zero Myr, and it looks about like today's maps.
+2. **Plates that move.** Segmentation, velocity, motion, and merge.
+   *Done when* plates drift for 150 Myr with the segmentation and motion checks passing. Gaps and overlaps are expected and reported.
+3. **Margins.** Rifting, subduction, accretion, and the supercontinent cycle.
+   *Done when* the mass budget closes and no cell is left empty over 500 Myr.
+4. **Decision point.** Generate hamwold maps from `tecto` at 150, 300, and 500 Myr for several seeds, with hamwold's ruggedness noise on top.
+   Compare them with current maps by eye and by the two range measures.
+   If the ranges are not clearly better, stop here.
+5. **Erosion and tuning.** Erosion, then the constants: plate count, cycle length, ocean share, and smoothing lengths.
+   Try detail 7.
+6. **Hamwold integration.** Settle the package's exported names, document them and the file format, and have hamwold import a released version.
 
-Port only the RNG operations the model needs, with fixtures for parsed seeds, integer streams, uniform samples, normal samples, and resumed streams.
-If browser seed equivalence is promised, include the random draws consumed by generated names before terrain generation, or begin parity comparisons from captured post-name-generation RNG state.
-Define a documented native seed contract independently rather than accidentally promising browser-equivalent output.
+Sizes, for scale: the upstream model code in scope is about 1,500 lines of JavaScript (`Crust`, `Lithosphere`, `Plate`, `Tectonophysics`, and parts of four others), plus the grid and the field operations it reaches.
 
-### 4. Explicit simulation time versus display policy
+## Not yet decided
 
-The browser's `Simulation.update()` uses `performance.now()` and skips updates slower than 5 fps.
-Lithosphere evolution also returns early below a timestep threshold derived from what a viewer could perceive, and universe sampling contains frame-rate-based thresholds.
-These are application policies mixed into the model, not CLI requirements.
+- **How hamwold depends on it before a release.** The package is the interface, but versions are not tagged during alpha. Until milestone 6, hamwold can use a `replace` directive or a pseudo-version; which one is open.
+- **Starting islands.** Hamwold needs islands of 150 to 1,800 hexes, which is 6 to 78 cells at detail 6. The model will make few of them. They may have to come from hamwold's noise, or from a pass that adds island arcs along ocean margins.
+- **Land fraction.** The model is set up for Earth's share of continental crust, about 40%, and hamwold floods to 35% land. If the flood has to cut far into the continents or far out onto the ocean floor, the initial ocean share needs to follow hamwold's parameter.
+- **The poles.** Hamwold covers everything beyond about 80° with ice. Whether the rotation should also keep large landmasses away from the poles is open.
+- **How long to run.** Whether maps are best at one supercontinent cycle, several, or part of one is a question for milestone 4.
 
-First reproduce the pinned reference behavior in the harness at named timesteps.
-Then replace wall-clock stepping with explicit simulated seconds and separate each display-derived policy from the physical model.
-Test both sides of affected thresholds.
-Treat any changed sampling or update policy as a documented semantic change with its own comparison results, not as a silent translation fix.
+## Licence and attribution
 
-### 5. Derived-state caches and checkpoints
-
-`Memo` marks a field clean before evaluating it to break circular dependencies.
-Its evaluation order is observable in the coupled climate model.
-Preserve this behavior first; design a cleaner dependency schedule only after equivalence is demonstrated.
-
-Native checkpoints must contain all persistent state needed for deterministic continuation: crust channels, masks, plate transforms, cycle ages, elapsed time, RNG state including cached distribution samples, parameters, and later persistent climate/orbit state.
-Audit which cached values are safely reconstructible.
-The source serializer stores `buffer:`-prefixed Base64 array buffers, while several model `getParameters()` methods omit dynamic or cached state.
-Do not assume an upstream JSON save is a complete deterministic checkpoint.
-In particular, audit supercontinent-cycle restoration and atmospheric temperature persistence before offering import compatibility.
-
-Use an explicit byte order for binary payloads and validate lengths, IDs, and finite values.
-A versioned JSON envelope with Base64-encoded typed buffers is a reasonable first format; compressed containers can wait for measured need.
-
-## Implementation sequence and exit gates
-
-| Phase | Work | Exit gate | Rough effort |
-| --- | --- | --- | --- |
-| 0. Freeze and characterize | Pin source; inventory reachable functions, units, dependency notices, default parameters; establish headless JS harness; capture deterministic meshes and states | Repeatable reference outputs, named compatibility boundaries, and an inventory of preexisting failures | 3–5 days |
-| 1. Mesh and field foundation | Go module/CLI skeleton; vectors/matrices; imported then native meshes; adjacency/spatial lookup; reachable raster operations and scratch ownership | Exact topology/ID fixtures; asymmetric operator cases; nearest-cell ties; aliasing and float-rounding checks | 1–2 weeks |
-| 2. Generation and observability | Compatible RNG; spherical terrain ranking; hypsography; rock-column construction; isostasy; sea-level solve; initial CSV/state inspection | Same captured initial state within specified field tolerances; meaningful generated-world CSV | About 1 week |
-| 3. Tectonic evolution | Plate segmentation/rotation/remapping; crust reactions and erosion; merge/rifting/subduction/accretion; cycle timing; explicit stepping | Stage-level and multi-step comparisons, no unexpected nonfinite fields, conservation and topology diagnostics | 2–3 weeks |
-| 4. Reproducible core release | Complete native checkpoints; run/resume/inspect/export; validation; interrupts; small cross-platform builds | Continuous and split/save/load runs produce identical native results; CLI smoke tests pass; core release is useful without JS | About 1 week |
-| 5. Coupled world parity | Orbital/spin cycles, star/insolation calculations, atmosphere, snow, biosphere diagnostics, cache/order fidelity; richer checkpoint state | Small/large timestep branches and coupled-field outputs compared against reference | 2–3 weeks |
-| 6. Hardening | Profile representative runs; optimize measured bottlenecks; documentation, attribution, cross-platform CI; optional legacy import | Published resource envelope, reproducible builds, and documented compatibility limits | About 1 week |
-
-**Planning range:** approximately 8–12 engineer-weeks for the full-model CLI, with a useful tectonics-only release around weeks 5–8.
-These are provisional estimates for one experienced engineer, not measured implementation timings.
-Re-estimate after phase 0; source defects, exact browser-seed equivalence, legacy-save support, and higher resolutions can materially increase effort.
-
-Do not begin climate integration while basic topology, initial crust, or one-step tectonics parity remains unexplained.
-Do not make the optional image/rendering features part of this critical path.
-
-## Validation strategy
-
-Use three complementary forms of evidence:
-
-1. **Differential fixtures:** compare Go with the pinned JavaScript on identical imported state, grid, parameters, RNG state, and timestep.
-   Compare initialization and individual step stages before long trajectories.
-   Discrete IDs and topology should be exact where the input calculations are equivalent; field tolerances must be justified per quantity using absolute and relative error, not one permissive global epsilon.
-   If float differences change segmentation or nearest-cell decisions, diagnose the boundary rather than simply loosening an ID assertion.
-2. **Independent invariants:** closed-sphere topology, reciprocal adjacency, valid ID ranges, bounded masks, finite state, nonnegative rock mass, valid rotations, age progression, and conserved-material budgets.
-   Rifting/subduction change some material inventories, so test the source's conserved continental channels and explicit source/sink accounting rather than asserting that all crust mass is constant.
-   The existing upstream tests allow roughly 1% delta conservation error and 3% multi-step conserved-crust drift; use those as historical context, not proof of scientific accuracy or universal release limits.
-3. **End-to-end CLI behavior:** seed reproducibility, malformed-input rejection, stable CSV fields and units, interrupt-safe saves, and uninterrupted versus checkpoint/resume equivalence.
-   Require exact repeatability on a defined native build/platform first; characterize cross-platform floating-point differences before making stronger promises.
-
-Use asymmetric vectors/matrices, boundary cells, tied distances, multiple seeds, resolution changes, timestep boundaries, first-step initialization, and supercontinent-cycle rollover.
-Test normal-sample cache restoration explicitly.
-Run the original QUnit suite through a compatible harness during phase 0; the executed smoke probe did not run that suite.
-Translate useful public behavioral tests, not every helper or incidental implementation assertion.
-Keep Node-based comparisons development-only, with small checked-in fixtures so normal `go test ./...` remains self-contained.
-
-Once Go code exists, run targeted tests during each stage, then `go test ./...`, `go vet ./...`, and CLI smoke runs.
-Use the race detector if concurrency is introduced; keep the initial solver serial.
-Benchmark and profile detail 3, 5, and 6, reporting step time, initialization time, peak memory, and allocations.
-Per-plate full-grid crust and scratch storage are likely memory pressure points, but measure before changing layouts.
-Do not promise a speedup from language choice alone.
-
-## Licensing and provenance
-
-The repository's [license](https://github.com/davidson16807/tectonics.js/blob/e43927ce88e766b63e35e896f36bfb882a4c8de4/LICENSE.txt) is **CC BY 4.0**, not MIT.
-Preserve attribution, license/disclaimer notices, source links, and an indication of modifications.
-Audit copied algorithms, vendored Three.js/random code, fixtures, and any submodules individually before deciding distribution notices and a license for new contributions; do not assume one root license covers every dependency.
-
-The source build preprocesses raster/shader files and includes separate GLSL academics, translation-tool, and research submodules.
-Port from canonical numerical source, use committed compiled bundles only as reference inputs, and fetch submodules only if reachable functionality requires them.
-Shaders, the GLSL build pipeline, and research documents need not become runtime dependencies.
-
-## First concrete work item
-
-Implement **phase 0 only**: pin the upstream source and required notices, create the headless reference harness, record deterministic detail-3/4 fixtures and stage-level outputs, inventory units and persistent state, and turn unexplained behavior into explicit compatibility decisions.
-The first native vertical slice should then be **seed → crust → sea level/elevation → CSV**, followed by **one tectonic step → checkpoint → deterministic resume**.
+tectonics.js is licensed under CC BY 4.0.
+`tecto` is a new implementation of its algorithms, and credits the project and its author in the README and in the packages that follow its model.
+Research the upstream code cites (Schellart 2010 for plate velocity; White, McKenzie and O'Nions 1992 for ocean crust thickness) is cited where the constants are used.
