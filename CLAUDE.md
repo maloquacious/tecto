@@ -57,6 +57,7 @@ Planned, and created as each part is first needed. `internal/erosion` does not e
 
 - The root package, `tecto`, is the public surface: the parameters, `Generate`, and the result. Its exported names are a promise to Hāmwold; keep them few.
 - `cmd/tecto` parses flags, calls the package, and writes files. It holds no logic of its own.
+- `internal/cerrs` is constant errors: sentinel errors declared as constants.
 - `internal/sphere` is the icosahedral grid, its lookups, and the field operations.
 - `internal/crust` is rock columns, thickness, density, isostasy, and sea level.
 - `internal/plates` is segmentation, velocity, motion, merging, rifting, subduction, accretion, and the cycle.

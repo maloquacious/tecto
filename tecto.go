@@ -5,12 +5,12 @@ package tecto
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
 	"slices"
 
+	"github.com/maloquacious/tecto/internal/cerrs"
 	"github.com/maloquacious/tecto/internal/crust"
 	"github.com/maloquacious/tecto/internal/hexmap"
 	"github.com/maloquacious/tecto/internal/plates"
@@ -26,7 +26,7 @@ const (
 
 // ErrInvalidParams is returned, wrapped, when Generate is given parameters
 // it cannot use.
-var ErrInvalidParams = errors.New("tecto: invalid parameters")
+const ErrInvalidParams = cerrs.Error("tecto: invalid parameters")
 
 // Params are the inputs to Generate. A zero Detail, Columns, or Rows means
 // its default.
