@@ -185,15 +185,16 @@ Each one ends with something that runs.
 4. **Decision point.** Generate hamwold maps from `tecto` at 150, 300, and 500 Myr for several seeds, with hamwold's ruggedness noise on top.
    Compare them with current maps by eye and by the two range measures.
    If the ranges are not clearly better, stop here.
+   Through this milestone the package is alpha and untagged, and hamwold reaches it through a `replace` directive.
+   If the decision is to go on, the package's exported names are taken as stable, the alpha label is dropped, and versions are tagged from then on (see WORKFLOW.md).
 5. **Erosion and tuning.** Erosion, then the constants: plate count, cycle length, ocean share, and smoothing lengths.
    Try detail 7.
-6. **Hamwold integration.** Settle the package's exported names, document them and the file format, and have hamwold import a released version.
+6. **Hamwold integration.** Document the package and the file format, tag a version, and have hamwold require it in place of its `replace` directive.
 
 Sizes, for scale: the upstream model code in scope is about 1,500 lines of JavaScript (`Crust`, `Lithosphere`, `Plate`, `Tectonophysics`, and parts of four others), plus the grid and the field operations it reaches.
 
 ## Not yet decided
 
-- **How hamwold depends on it before a release.** The package is the interface, but versions are not tagged during alpha. Until milestone 6, hamwold can use a `replace` directive or a pseudo-version; which one is open.
 - **Starting islands.** Hamwold needs islands of 150 to 1,800 hexes, which is 6 to 78 cells at detail 6. The model will make few of them. They may have to come from hamwold's noise, or from a pass that adds island arcs along ocean margins.
 - **Land fraction.** The model is set up for Earth's share of continental crust, about 40%, and hamwold floods to 35% land. If the flood has to cut far into the continents or far out onto the ocean floor, the initial ocean share needs to follow hamwold's parameter.
 - **The poles.** Hamwold covers everything beyond about 80° with ice. Whether the rotation should also keep large landmasses away from the poles is open.

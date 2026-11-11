@@ -53,15 +53,34 @@ The model is verified in Go, by the checks listed under "Verification" in PORT_P
   Documentation-only commits are encouraged to bump it but are not required to.
 - Choose the bump by the change: patch for fixes, minor for new features or any breaking change while below v1.0.0.
   A change to the root package's exported names, to the output file's format, or to the output for a given seed is a breaking change.
-  Keep `PreRelease: "alpha"` until told otherwise.
+- Go takes a module's version from its git tags and never reads `version.go`, so the two must be kept in step by hand.
+
+### Through step 4: alpha, untagged
+
+Steps are the sub-issues of [the port issue](https://github.com/maloquacious/tecto/issues/1); step 4 is the decision point.
+
+- Keep `PreRelease: "alpha"`.
 - Do not create git tags.
-  Versions will be tagged on GitHub once the project leaves alpha.
+- Hāmwold depends on this module through a `replace` directive in its own `go.mod` that points at a local checkout.
+  Do not publish a version, and do not point Hāmwold at a pseudo-version, to work around that.
+
+### After step 4: stable, tagged
+
+If step 4 decides to go on, the root package's exported names are taken as stable.
+
+- Remove `PreRelease` from `version.go` in the first commit after the decision.
+- Tag a commit when Hāmwold needs to depend on it.
+  The tag is `v` followed by the version in `version.go` at that commit, such as `v0.5.0`; check that they match before pushing the tag.
+- Never move or delete a pushed tag. The Go proxy keeps the first copy it sees, so a bad tag is fixed with a new version.
+- Hāmwold then requires the tagged version, and its `replace` directive is removed.
+
+If step 4 decides to stop, the project stays alpha and untagged.
 
 ## Git workflow
 
 - Commit directly to `main`.
   No feature branches or pull requests; history is the recovery mechanism.
-  This may change once the project leaves alpha.
+  This may change after step 4.
 - Agents are authorized to commit and push each task to `origin` as it is completed, provided all checks pass and Go code changes include a version bump.
 - Agents are authorized to create GitHub labels as needed.
 
