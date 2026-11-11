@@ -29,6 +29,10 @@ const accretedPlutonic = 0.85
 // down at 50 km per million years is 355 km³, so the share is about a
 // tenth.
 //
+// Runs at a twentieth, a fifth, and two fifths, measured through Hāmwold,
+// gave maps that differ from these by less than one seed differs from
+// another, so the share stays at the figure with a source.
+//
 // This is not in tectonics.js.
 const arcShare = 0.1
 

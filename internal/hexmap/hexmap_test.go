@@ -143,3 +143,34 @@ func TestSampleIsContinuousAcrossTheWrap(t *testing.T) {
 		}
 	}
 }
+
+func TestTurned(t *testing.T) {
+	for name, f := range testFrames {
+		for _, angle := range []float64{0, 0.3, math.Pi / 2, 2.5, math.Pi} {
+			got := f.Turned(angle)
+			if got.Center != f.Center {
+				t.Errorf("%s turned by %v: the center moved from %v to %v", name, angle, f.Center, got.Center)
+			}
+			// Still three directions of length one at right angles, and
+			// still east of north as the map has it.
+			for what, v := range map[string]float64{
+				"north's length":   got.North.Len() - 1,
+				"east's length":    got.East.Len() - 1,
+				"north and center": got.North.Dot(got.Center),
+				"north and east":   got.North.Dot(got.East),
+				"handedness":       got.North.Cross(got.Center).Sub(got.East).Len(),
+			} {
+				if math.Abs(v) > 1e-12 {
+					t.Errorf("%s turned by %v: %s is off by %v", name, angle, what, v)
+				}
+			}
+			// The pole has moved by the angle, toward the old east.
+			if d := got.North.Dot(f.North) - math.Cos(angle); math.Abs(d) > 1e-12 {
+				t.Errorf("%s turned by %v: the pole moved by the wrong angle (cosine off by %v)", name, angle, d)
+			}
+			if d := got.North.Dot(f.East) - math.Sin(angle); math.Abs(d) > 1e-12 {
+				t.Errorf("%s turned by %v: the pole did not move east (off by %v)", name, angle, d)
+			}
+		}
+	}
+}

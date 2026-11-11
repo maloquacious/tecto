@@ -56,6 +56,14 @@ func FrameAt(center sphere.Vec3) Frame {
 	return Frame{Center: center, East: north.Cross(center), North: north}
 }
 
+// Turned returns the frame turned about its center by an angle in radians.
+// The center stays at the middle of the map, and the north pole moves toward
+// what was the east.
+func (f Frame) Turned(angle float64) Frame {
+	north := f.North.Scale(math.Cos(angle)).Add(f.East.Scale(math.Sin(angle))).Normalize()
+	return Frame{Center: f.Center, East: north.Cross(f.Center), North: north}
+}
+
 // Point returns the point on the sphere at a latitude and longitude on the
 // map, in radians.
 func (f Frame) Point(lat, lon float64) sphere.Vec3 {

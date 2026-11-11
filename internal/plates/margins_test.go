@@ -290,8 +290,10 @@ func TestMarginsOver500Myr(t *testing.T) {
 				}
 			}
 		}
-		if w.Time != 500 || w.Cycles != 3 {
-			t.Errorf("seed %d: %v Myr and %d cycles", seed, w.Time, w.Cycles)
+		// The plates are drawn afresh at the end of each cycle but the one
+		// the run ends in or on.
+		if want := int(math.Ceil(500/CycleMyr)) - 1; w.Time != 500 || w.Cycles != want {
+			t.Errorf("seed %d: %v Myr and %d cycles, want 500 and %d", seed, w.Time, w.Cycles, want)
 		}
 		b := w.Budget(m)
 		if sum := b.Start - b.Subducted + b.Accreted + b.Erupted + b.Resampled; math.Abs(sum-b.End) > 1e-9*b.Start {

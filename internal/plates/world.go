@@ -24,9 +24,17 @@ const (
 	stepCells = 0.5
 	// CycleMyr is how long a set of plates lasts, in millions of years.
 	// When it is over the plates are discarded and drawn afresh from the
-	// crust as it then is. It is the length tectonics.js gives its
-	// supercontinent cycle.
-	CycleMyr = 150.0
+	// crust as it then is.
+	//
+	// tectonics.js gives its supercontinent cycle 150. New plates cut
+	// across the old continents and bring them together along new lines,
+	// so each drawing makes ranges, and a run of 150 with that cycle has
+	// had only one. Measured through Hāmwold on sixteen seeds, a cycle of
+	// 100 puts twice the mountains on the map at 150 million years that a
+	// cycle of 150 does and half as many again at 300, in ranges that are
+	// longer for their width. A cycle of 75 does no better than 100, and
+	// one of 250 does worse than 150.
+	CycleMyr = 100.0
 )
 
 // Budget is an account of the world's continental rock, in kilograms. The

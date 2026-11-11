@@ -17,6 +17,12 @@ import (
 // what it was, so continents that meet lock together along a narrow belt
 // instead of sliding far over each other.
 //
+// The value was chosen from runs at 300, 1,000, 3,000, and 10,000, measured
+// through Hāmwold. At 300 and 1,000 the continents still slide: the belts
+// of doubled crust are 650 to 1,000 km wide and less long for their width,
+// and the land shrinks as it stacks. At 10,000 the ranges are no narrower
+// than at 3,000, and there are fewer of them by 500 million years.
+//
 // This is not in tectonics.js, which lets continents override each other
 // without limit.
 const collisionDrag = 3000.0

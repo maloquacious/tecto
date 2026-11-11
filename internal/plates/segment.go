@@ -25,14 +25,23 @@ import (
 // of cells at its usual detail of 5, where cells are about 240 km apart;
 // they are lengths and areas here so that the plates come out alike at any
 // detail.
+//
+// The values are those of tectonics.js. Each was tried at other values and
+// measured through Hāmwold, and none of the others made maps that differ
+// from these by more than one seed differs from another: 5, 10, and 14
+// plates; a least area of 5 million km²; growth of 600 km; and smoothing
+// over 1,000 and 3,000 km. With 10 plates or more there are perhaps a
+// tenth more mountains, and the ranges are no longer for their width.
 const (
-	// MaxPlates is the most plates the crust is divided into.
+	// MaxPlates is the most plates the crust is divided into. Earth has
+	// seven large ones.
 	MaxPlates = 7
 	// MinPlateAreaKm2 is the least area a plate may have, in square
-	// kilometres.
+	// kilometres: 200 cells at detail 5. It is a fiftieth of the sphere.
 	MinPlateAreaKm2 = 10e6
 	// GrowthKm is how far, in kilometres, a plate found from the mantle's
-	// flow is first grown into ground that no plate has claimed.
+	// flow is first grown into ground that no plate has claimed: 5 cells
+	// at detail 5.
 	GrowthKm = 1200.0
 	// SmoothingKm is the distance, in kilometres, over which the crust's
 	// buoyancy is smoothed into the pressure that drives the mantle. It is
@@ -40,7 +49,7 @@ const (
 	// on a grid of detail 4.
 	SmoothingKm = 1900.0
 	// likeFlow is the cosine of the widest angle between the mantle's turn
-	// at two cells of one plate's seed region.
+	// at two cells of one plate's seed region: 60°, as in tectonics.js.
 	likeFlow = 0.5
 )
 

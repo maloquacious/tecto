@@ -18,6 +18,11 @@ import (
 //	v = S·F·(W·L·T)^(2/3) / (18·c·μ)
 //
 // The size of the slab and the constants are the ones tectonics.js uses.
+// With them the model's fastest plate usually moves at about 100 km per
+// million years, the speed of Earth's fastest. Runs with the pull halved and doubled,
+// measured through Hāmwold, were no better: slower plates meet less and
+// make fewer mountains, and faster ones slide further over each other and
+// make wider belts.
 const (
 	slabWidth       = 300e3   // W, metres
 	slabLength      = 600e3   // L, metres

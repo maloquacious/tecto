@@ -23,10 +23,20 @@ import (
 // five sixths of the height it lost. So a range wears down about six times
 // more slowly than this figure alone would have it: one 300 km across lasts
 // some hundreds of millions of years.
-const Rate = 400.0
+//
+// The value was chosen from runs at 100, 200, 400, 800, and 1,600, measured
+// through Hāmwold. The faster the land wears, the fewer mountains are left
+// and the less they run in ranges: at 1,600 there are a third fewer than at
+// 400. At 200 there are a fifth more than at 400, in ranges as long for
+// their width or longer. At 100 there are more again, but the ranges grow
+// wider, the highest ground higher, and the land smaller as rock stays
+// piled where it was stacked.
+const Rate = 200.0
 
 // maxShare is the most of a cell's continental rock that may leave it in
-// one step.
+// one step. It is there so that a long step over a steep drop cannot take
+// more rock than the cell has, and is set well short of all of it so that
+// a cell is not emptied onto its neighbors and left lower than they are.
 const maxShare = 0.25
 
 // Flow is rock on the move from one cell to a cell beside it.

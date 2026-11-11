@@ -52,7 +52,9 @@ type Result struct {
 	// Heights has one height for each hex, in metres above the model's sea
 	// level. The hexes are flat-topped, in odd-q offset coordinates, and
 	// indexed by row*Columns + column. Row 0 is the north edge, and the map
-	// wraps east to west. The largest landmass is in the middle of the map.
+	// wraps east to west. The largest landmass is in the middle of the map,
+	// which is turned about it so that as little land as may be lies near
+	// the poles.
 	Heights []float32
 	Summary Summary
 }
@@ -208,7 +210,7 @@ func Generate(p Params) (*Result, error) {
 	}
 
 	center, landmasses := largestLandmass(g, height)
-	frame := hexmap.FrameAt(center)
+	frame := mapFrame(g, height, center)
 	return &Result{
 		Columns: p.Columns,
 		Rows:    p.Rows,
@@ -242,6 +244,47 @@ func largestLandmass(g *sphere.Grid, height []float64) (center sphere.Vec3, coun
 		return sphere.Vec3{X: 1}, count
 	}
 	return sum[best].Normalize(), count
+}
+
+// The map is turned about its middle to keep land away from its poles.
+const (
+	// polarLatitude is the latitude, in degrees, beyond which land counts
+	// as being at a pole. Hāmwold covers everything beyond about 80° with
+	// ice, and its edge wanders some degrees either way.
+	polarLatitude = 70.0
+	// frameTurns is the number of ways of turning the map that are tried:
+	// one for each degree of half a turn. The other half only swaps north
+	// and south.
+	frameTurns = 180
+)
+
+// mapFrame returns where the map lies on the sphere. The center is in the
+// middle of the map, and of the ways the map can be turned about it, this
+// is the one that leaves the least land beyond polarLatitude. Among equals
+// it is the one whose north pole is nearest to the sphere's own.
+func mapFrame(g *sphere.Grid, height []float64, center sphere.Vec3) hexmap.Frame {
+	base := hexmap.FrameAt(center)
+	limit := math.Sin(polarLatitude * math.Pi / 180)
+	best, least := base, polarLand(g, height, base.North, limit)
+	for turn := 1; turn < frameTurns && least > 0; turn++ {
+		f := base.Turned(float64(turn) * math.Pi / frameTurns)
+		if polar := polarLand(g, height, f.North, limit); polar < least {
+			best, least = f, polar
+		}
+	}
+	return best
+}
+
+// polarLand returns the area of the land that lies nearer to either end of
+// an axis than the latitude whose sine is limit, in steradians.
+func polarLand(g *sphere.Grid, height []float64, north sphere.Vec3, limit float64) float64 {
+	var area float64
+	for cell, h := range height {
+		if h > 0 && math.Abs(g.Pos[cell].Dot(north)) > limit {
+			area += g.Area[cell]
+		}
+	}
+	return area
 }
 
 // summarize fills in the figures of s that come from the heights.

@@ -54,6 +54,13 @@ func RandomRanks(pos []sphere.Vec3, rng *rand.Rand) []float64 {
 // The share of the crust that is ocean floor, and the spread of elevations
 // within the ocean floor and within the continents, in metres relative to
 // sea level. They are Earth's, as tectonics.js gives them.
+//
+// With ocean floor as six tenths of the crust, 0.38 of the sphere is land,
+// which is near the 0.35 that Hāmwold floods its maps to, so Hāmwold's
+// coast runs close to the model's. With seven tenths the model's land is
+// 0.30, and Hāmwold must make up the rest out of ocean floor: its maps then
+// have more islands and a third fewer mountains. With five tenths they
+// have few islands. So the share stays.
 const (
 	OceanShare         = 0.6
 	oceanMeanElevation = -4019.0

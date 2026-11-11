@@ -148,7 +148,11 @@ func Elevations(columns []Column) []float64 {
 
 // OceanMeanDepth is how deep the ocean would be, in metres, if it were
 // spread evenly over the whole sphere, land included. It is the value
-// tectonics.js uses, and it fixes the ocean's volume.
+// tectonics.js uses, and it fixes the ocean's volume. At this depth the sea
+// comes a little way up the continental slope, and nearly all the
+// continental crust is land. Hāmwold takes only the order of the heights
+// and the rise of the high ground above the rest, neither of which the
+// sea's level changes, so there has been nothing to tune it against.
 const OceanMeanDepth = 2000.0
 
 // MeanDepth returns the depth of the sea at a level, averaged over the

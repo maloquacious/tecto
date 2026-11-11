@@ -9,6 +9,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/maloquacious/tecto/internal/crust"
+	"github.com/maloquacious/tecto/internal/hexmap"
 	"github.com/maloquacious/tecto/internal/sphere"
 )
 
@@ -119,6 +121,44 @@ func TestGenerateRanges(t *testing.T) {
 	}
 }
 
+// The plates leave the world much as Earth is: the same share of it land,
+// the ocean floor and the continents at the same levels, and the highest
+// ground higher, where crust has been stacked.
+func TestGenerateRangesWithPlates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs the plates for 300 million years on twenty seeds")
+	}
+	for seed := range uint64(20) {
+		r, err := Generate(Params{Seed: seed, Myr: 300, Detail: 5, Columns: 64, Rows: 32})
+		if err != nil {
+			t.Fatalf("seed %d: %v", seed, err)
+		}
+		s := r.Summary
+		if !slices.IsSorted([]float64{s.Min, s.P5, s.P25, s.P50, s.P75, s.P95, s.Max}) {
+			t.Errorf("seed %d: percentiles out of order: %+v", seed, s)
+		}
+		for _, c := range []struct {
+			name        string
+			got, lo, hi float64
+		}{
+			{"land fraction", s.LandFraction, 0.33, 0.41},
+			{"lowest height", s.Min, -4200, -3300},
+			{"median height", s.P50, -3300, -2600},
+			{"P75 height", s.P75, 1600, 2400},
+			{"P95 height", s.P95, 2800, 4100},
+			{"highest height", s.Max, 5000, 20000},
+			{"overlap", s.OverlapFraction, 0, 0.15},
+			// Arcs add rock, a percent or so for each hundred million
+			// years, and nothing takes much away.
+			{"continental rock, as a share of the start", s.Continental.End / s.Continental.Start, 1, 1.06},
+		} {
+			if !(c.got >= c.lo && c.got <= c.hi) {
+				t.Errorf("seed %d: %s is %.4g, want %.4g to %.4g", seed, c.name, c.got, c.lo, c.hi)
+			}
+		}
+	}
+}
+
 func TestLargestLandmass(t *testing.T) {
 	g, err := sphere.NewGrid(4)
 	if err != nil {
@@ -176,6 +216,78 @@ func TestLargestLandmassIsInTheMiddle(t *testing.T) {
 	}
 	if middle <= far {
 		t.Errorf("%d of %d hexes are land in the middle of the map, %d on the far side", middle, n, far)
+	}
+}
+
+func TestMapFrameKeepsLandFromThePoles(t *testing.T) {
+	g, err := sphere.NewGrid(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := math.Sin(polarLatitude * math.Pi / 180)
+	// A continent in the middle of the map, and an island where the map's
+	// north pole would be if nothing were done about it.
+	center, pole := sphere.Vec3{X: 1}, sphere.Vec3{Z: 1}
+	height := make([]float64, len(g.Pos))
+	for cell, p := range g.Pos {
+		height[cell] = -1000
+		if p.Dot(center) > math.Cos(0.5) || p.Dot(pole) > math.Cos(0.15) {
+			height[cell] = 500
+		}
+	}
+	plain := hexmap.FrameAt(center)
+	if polarLand(g, height, plain.North, limit) == 0 {
+		t.Fatal("the island is not at the pole of the plain frame")
+	}
+	f := mapFrame(g, height, center)
+	if f.Center != center {
+		t.Errorf("the middle of the map is %v, want %v", f.Center, center)
+	}
+	if polar := polarLand(g, height, f.North, limit); polar != 0 {
+		t.Errorf("%v steradians of land are left at the poles, and there is room to leave none", polar)
+	}
+
+	// With no land at the poles the map is not turned.
+	for cell, p := range g.Pos {
+		if p.Dot(pole) > math.Cos(0.15) {
+			height[cell] = -1000
+		}
+	}
+	if f := mapFrame(g, height, center); f != plain {
+		t.Errorf("the map was turned to %+v with no land at its poles, want %+v", f, plain)
+	}
+}
+
+// However the crust lies, turning the map leaves no more land at the poles
+// than not turning it.
+func TestGenerateKeepsLandFromThePoles(t *testing.T) {
+	limit := math.Sin(polarLatitude * math.Pi / 180)
+	g, err := sphere.NewGrid(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var turned, plain float64
+	for seed := range uint64(20) {
+		columns := crust.Initial(g.Pos, stream(seed, streamLayout), stream(seed, streamElevations))
+		height := crust.Elevations(columns)
+		sea, err := crust.SeaLevel(height, g.Area, crust.OceanMeanDepth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range height {
+			height[i] -= sea
+		}
+		center, _ := largestLandmass(g, height)
+		a := polarLand(g, height, mapFrame(g, height, center).North, limit)
+		b := polarLand(g, height, hexmap.FrameAt(center).North, limit)
+		if a > b {
+			t.Errorf("seed %d: %v steradians of land at the poles, and %v with the map not turned", seed, a, b)
+		}
+		turned += a
+		plain += b
+	}
+	if turned > plain/2 {
+		t.Errorf("over twenty seeds %v steradians of land are at the poles, and %v with the map not turned: want under half", turned, plain)
 	}
 }
 
