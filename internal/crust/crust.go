@@ -99,6 +99,13 @@ func (c Column) Continental() float64 {
 		c.FelsicPlutonic + c.FelsicVolcanic
 }
 
+// Floats reports whether the column is lighter than the mantle and will
+// stay so however old it grows. Such crust cannot be subducted.
+func (c Column) Floats() bool {
+	c.Age = MaficLifetime
+	return c.Mass() > 0 && c.Density() < MantleDensity
+}
+
 // Check returns an error if the column cannot be: a mass or age that is
 // negative or not finite, or no rock at all.
 func (c Column) Check() error {

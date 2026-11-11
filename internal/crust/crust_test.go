@@ -288,3 +288,23 @@ func TestContinentalLeavesOutTheOceanFloor(t *testing.T) {
 		t.Error("a column with no rock passes the check")
 	}
 }
+
+func TestFloats(t *testing.T) {
+	young := NewOcean()
+	old := young
+	old.Age = MaficLifetime
+	for _, c := range []struct {
+		name   string
+		column Column
+		want   bool
+	}{
+		{"a continent", ColumnAt(500), true},
+		{"new ocean floor, which will not float when it is old", young, false},
+		{"old ocean floor", old, false},
+		{"no crust", Column{}, false},
+	} {
+		if got := c.column.Floats(); got != c.want {
+			t.Errorf("%s: floats is %v, want %v", c.name, got, c.want)
+		}
+	}
+}

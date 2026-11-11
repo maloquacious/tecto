@@ -25,7 +25,8 @@ Its one customer is the world map generator in Hāmwold (`github.com/mdhender/ha
 
 - Milestones 1, 2, and 3 of the plan are in place: the grid, the starting crust, sea level, sampling to the hex map, and plates that are segmented, move, rift, subduct, accrete, and are redrawn every 150 Myr.
   Every cell has crust after every step, and `Generate` reports an account of the continental rock in its summary.
-  Milestone 4, the decision point, is next.
+  Milestone 4, the decision point, has been measured twice. The second attempt added three things that make ranges: continents that meet lock together, volcanic arcs rise above subducting ocean floor, and land erodes.
+  The decision itself is the user's, on [issue 5](https://github.com/maloquacious/tecto/issues/5); until it is made the package stays alpha and untagged.
 
 ## What it is for
 
@@ -34,7 +35,7 @@ Its one customer is the world map generator in Hāmwold (`github.com/mdhender/ha
 - The output replaces one call in Hāmwold, the `g.fracture(...)` that builds `height` in `worldgen.Generate`.
   Hāmwold floods and ranks that field itself, so it uses only the ordering of the heights.
 - The point of the exercise is mountain ranges with a direction to them.
-  Whether the plates deliver that is not yet known; milestone 4 in the plan is where it is decided, and the project may stop there.
+  Milestone 4 in the plan is where it is decided whether the plates deliver that, and the project may stop there.
 
 Keep to that. Do not add climate, a hydrosphere, a biosphere, orbits, interactive display, intermediate results, or saving and resuming a run.
 
@@ -53,15 +54,15 @@ The algorithms come from the lithosphere model of [tectonics.js](https://github.
 
 ## Layout
 
-Planned, and created as each part is first needed. `internal/erosion` does not exist yet:
+Planned, and created as each part is first needed:
 
 - The root package, `tecto`, is the public surface: the parameters, `Generate`, and the result. Its exported names are a promise to Hāmwold; keep them few.
 - `cmd/tecto` parses flags, calls the package, and writes files. It holds no logic of its own.
 - `internal/cerrs` is constant errors: sentinel errors declared as constants.
 - `internal/sphere` is the icosahedral grid, its lookups, and the field operations.
 - `internal/crust` is rock columns, thickness, density, isostasy, and sea level.
-- `internal/plates` is segmentation, velocity, motion, merging, rifting, subduction, accretion, and the cycle.
-- `internal/erosion` is erosion.
+- `internal/plates` is segmentation, velocity, motion, merging, rifting, subduction, accretion, arcs, collision, and the cycle.
+- `internal/erosion` is erosion: which rock moves where. `internal/plates` applies it to the plates.
 - `internal/hexmap` rotates the sphere and samples it onto Hāmwold's hex raster.
 - `tmp/` holds build output and scratch files. It is git-ignored.
 

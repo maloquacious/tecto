@@ -16,6 +16,22 @@ import (
 // ones tectonics.js uses.
 const accretedPlutonic = 0.85
 
+// arcShare is the share of the ocean floor that goes down under a plate
+// which comes up again through the plate above, as the felsic rock of a
+// volcanic arc. A sinking slab carries water down, the mantle over it melts,
+// and what rises builds new continental crust at the edge of the plate on
+// top: a coastal range where that edge is a continent, and a chain of
+// islands where it is ocean floor.
+//
+// Arcs add about 30 km³ of crust per million years for each kilometre of
+// their length (Reymer and Schubert 1984, "Phanerozoic addition rates to the
+// continental crust and crustal growth"). Ocean crust 7.1 km thick going
+// down at 50 km per million years is 355 km³, so the share is about a
+// tenth.
+//
+// This is not in tectonics.js.
+const arcShare = 0.1
+
 // sunk is a cell of a plate that has gone down under another plate.
 type sunk struct {
 	plate int
@@ -49,6 +65,7 @@ func (w *World) subduct(m *Merged) {
 	for _, s := range gone {
 		p := w.Plates[s.plate]
 		rock := p.Crust[s.cell].Continental() * g.Area[s.cell]
+		floor := (p.Crust[s.cell].MaficVolcanic + p.Crust[s.cell].MaficPlutonic) * g.Area[s.cell]
 		p.Member[s.cell] = false
 		p.Crust[s.cell] = crust.Column{}
 		changed[s.plate] = true
@@ -59,15 +76,17 @@ func (w *World) subduct(m *Merged) {
 		// cell that lay over no cell of the world may have nothing above
 		// it, and then its rock is lost.
 		top := m.Top[s.under]
-		if rock == 0 || top < 0 || int(top) == s.plate {
+		if top < 0 || int(top) == s.plate {
 			continue
 		}
 		onto := m.local[top][s.under]
 		c := &w.Plates[top].Crust[onto]
 		// The rock is spread over a cell of another size.
-		c.FelsicPlutonic += rock / g.Area[onto] * accretedPlutonic
-		c.FelsicVolcanic += rock / g.Area[onto] * (1 - accretedPlutonic)
+		arc := floor * arcShare
+		c.FelsicPlutonic += (rock + arc) / g.Area[onto] * accretedPlutonic
+		c.FelsicVolcanic += (rock + arc) / g.Area[onto] * (1 - accretedPlutonic)
 		w.budget.Accreted += rock * metres2
+		w.budget.Erupted += arc * metres2
 	}
 	w.outline(changed)
 }

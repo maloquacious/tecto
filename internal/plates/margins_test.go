@@ -18,7 +18,7 @@ import (
 func closes(t *testing.T, w *World) {
 	t.Helper()
 	b := w.budget
-	want := b.Start - b.Subducted + b.Accreted + b.Resampled
+	want := b.Start - b.Subducted + b.Accreted + b.Erupted + b.Resampled
 	if got := w.continental(); math.Abs(got-want) > 1e-9*b.Start {
 		t.Errorf("at %v Myr the plates hold %v kg of continental rock, but the account comes to %v (%+v)", w.Time, got, want, b)
 	}
@@ -109,7 +109,7 @@ func TestSunkenEdgeIsTakenAndItsRockAccreted(t *testing.T) {
 		w.subduct(m)
 		closes(t, w)
 
-		var taken float64
+		var taken, erupted float64
 		for cell := range g.Pos {
 			both := landCap[cell] && seaCap[cell]
 			if sea.Member[cell] != (seaCap[cell] && !both) {
@@ -121,8 +121,12 @@ func TestSunkenEdgeIsTakenAndItsRockAccreted(t *testing.T) {
 			want := continent
 			if both {
 				taken += floor.Sediment * g.Area[cell] * metres2
-				want.FelsicPlutonic += 0.85 * floor.Sediment
-				want.FelsicVolcanic += 0.15 * floor.Sediment
+				// The rock the floor carried, and the arc that comes up
+				// from the floor itself.
+				arc := arcShare * (floor.MaficVolcanic + floor.MaficPlutonic)
+				erupted += arc * g.Area[cell] * metres2
+				want.FelsicPlutonic += 0.85 * (floor.Sediment + arc)
+				want.FelsicVolcanic += 0.15 * (floor.Sediment + arc)
 			}
 			got := land.Crust[cell]
 			if landCap[cell] && (math.Abs(got.FelsicPlutonic-want.FelsicPlutonic) > 1e-6 ||
@@ -134,6 +138,9 @@ func TestSunkenEdgeIsTakenAndItsRockAccreted(t *testing.T) {
 		b := w.budget
 		if math.Abs(b.Subducted-taken) > 1e-9*taken || math.Abs(b.Accreted-taken) > 1e-9*taken {
 			t.Errorf("%v kg subducted and %v kg accreted, want %v of each", b.Subducted, b.Accreted, taken)
+		}
+		if erupted == 0 || math.Abs(b.Erupted-erupted) > 1e-9*erupted {
+			t.Errorf("%v kg came up in the arc, want %v", b.Erupted, erupted)
 		}
 		after := w.Merge()
 		if after.Overlap != 0 || after.Gap != m.Gap {
@@ -287,7 +294,7 @@ func TestMarginsOver500Myr(t *testing.T) {
 			t.Errorf("seed %d: %v Myr and %d cycles", seed, w.Time, w.Cycles)
 		}
 		b := w.Budget(m)
-		if sum := b.Start - b.Subducted + b.Accreted + b.Resampled; math.Abs(sum-b.End) > 1e-9*b.Start {
+		if sum := b.Start - b.Subducted + b.Accreted + b.Erupted + b.Resampled; math.Abs(sum-b.End) > 1e-9*b.Start {
 			t.Errorf("seed %d: the world ends with %v kg of continental rock, but the account comes to %v", seed, b.End, sum)
 		}
 		if b.Start != continental(g, columns, nil) || b.End != continental(g, m.Columns, nil) {

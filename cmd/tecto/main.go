@@ -93,8 +93,8 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 	if s.Plates > 0 {
 		fmt.Fprintf(stderr, "plates         %d, overlapping over %.3f of the sphere\n", s.Plates, s.OverlapFraction)
 		b := s.Continental
-		fmt.Fprintf(stderr, "continents     %.4g kg at the start: %.3f%% subducted, %.3f%% accreted, %+.3f%% from resampling, %.4g kg at the end\n",
-			b.Start, 100*b.Subducted/b.Start, 100*b.Accreted/b.Start, 100*b.Resampled/b.Start, b.End)
+		fmt.Fprintf(stderr, "continents     %.4g kg at the start: %.3f%% subducted, %.3f%% accreted, %.3f%% new in arcs, %+.3f%% from resampling, %.4g kg at the end\n",
+			b.Start, 100*b.Subducted/b.Start, 100*b.Accreted/b.Start, 100*b.Erupted/b.Start, 100*b.Resampled/b.Start, b.End)
 	}
 	fmt.Fprintf(stderr, "land fraction  %.3f in %d landmasses\n", s.LandFraction, s.Landmasses)
 	fmt.Fprintf(stderr, "high ground    %.2f times as long as wide", s.HighGroundElongation)

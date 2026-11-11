@@ -94,11 +94,14 @@ Elevation is never stored. It is derived from the column.
 | Merge | Build the world's crust from the plates. Where plates overlap, the least dense is on top, and continental rock from all of them stacks | `merge_plates_to_master`, `Crust.overlap` |
 | Rifting | Where plates have parted, the gap fills with new ocean crust, joined to the plate beside it | `update_rifting` |
 | Subduction | Where a plate lies under another and is denser than the mantle, its edge is removed. Its continental rock is added to the plate above | `update_subducted` |
-| Erosion | Rock moves from a cell to each lower neighbour, in proportion to the drop | `Crust.model_erosion` |
+| Collision | Where continents have met, neither can go down. The meeting resists the two plates' moving past each other, and they lock together along a narrow belt | not in upstream |
+| Arcs | A tenth of the ocean floor that goes down comes up through the plate above as new continental rock | not in upstream |
+| Erosion | Rock moves from a cell of land to each lower neighbour, in proportion to the drop | `Crust.model_erosion` |
 | Supercontinent cycle | Every 150 Myr the plates are discarded and segmented afresh from the current crust | `SupercontinentCycle.js` |
 
-Mountains come from two of these steps: continental rock stacking where plates overlap, and accretion above a subducting edge.
-Both act along plate margins, which is what makes ranges.
+Mountains come from three of these steps: continental rock stacking where continents meet, and accretion and arcs above a subducting edge.
+All act along plate margins, which is what makes ranges.
+Erosion then spreads them and wears the old ones down.
 
 The rock reactions (weathering, lithification, metamorphosis) are left out to begin with.
 They move mass between rock types of similar density, so they change elevation little, and upstream has weathering switched off.
@@ -127,6 +130,11 @@ These are decided now, because nothing obliges the Go to repeat them.
 - **The cycle.** The plates are drawn at the start, and again each 150 Myr if the run goes on. Steps end exactly on the end of a cycle.
 - **Speed is speed over the ground.** The step is set by the fastest-moving cell of any plate, not by the fastest rate of turning: a small plate may spin fast and move little.
 - **Bare cells are bare.** Merging the plates leaves a cell that no plate covers with no crust, which the checks reject. Milestone 2 gave it new ocean floor as a placeholder.
+- **Continents that meet lock together.** Upstream lets one continent slide over another without limit, and the doubled crust is a plateau as wide as the overlap.
+  In `tecto`, each cell where crust that will never sink lies on other such crust resists the two plates' moving past each other there, 3,000 times as hard as the mantle resists a plate over the same area. The rates of the plates that have met are then found together, each driven as before. A few cells of collision are enough to hold two plates, so the doubled crust is a belt one to three cells wide. The plates can still turn about the belt, and go on together where the rest of their edges pull them.
+- **Volcanic arcs.** In upstream, as in `tecto` before this, subduction under a continent raised nothing, because ocean floor that sinks carries almost no continental rock to accrete. Now a tenth of the mass of the floor that goes down is added to the cell of the plate above as felsic rock. The share is from the rate at which Earth's arcs add crust (Reymer and Schubert 1984). It makes a coastal range along a continent's subducting margin, and it is new continental rock, so the account has an entry for it.
+- **Erosion wears land, to the sea.** Upstream moves rock down every slope, the sea floor's too, at a rate fixed per cell and per neighbour. `tecto` moves rock only from cells above sea level, in proportion to the drop to the neighbour or to the sea if the neighbour is under it, so sediment builds the shore out and does not drain off the continental slope. The rate is a diffusivity, 400 km² per million years, applied with the mesh's cotangent weights, so it is alike at any detail. A cell gives up at most a quarter of its continental rock in a step. Each kind of rock moves as itself and in proportion; upstream takes the top layers first.
+- **Erosion acts on stacked plates alike.** The rock that leaves a cell of the world is taken from every plate with crust there, in the same share, and lands on the uppermost plate of the cell it goes to. The plates' total is kept exactly.
 - **A plain copy bug.** Upstream's `RockColumn` sets `mafic_plutonic` from `mafic_volcanic`, so new ocean crust is doubled. Not repeated.
 - **Smooth cuts.** Upstream spreads each of the initial terrain's cuts over about 40 km, less than a cell, so its field is whole numbers and cells of equal rank are ordered by cell id. `tecto` spreads a cut over 250 km, about the smallest feature it is meant to supply, so the field is continuous at any detail.
 - **Thicknesses, not masses, for the starting crust.** Upstream writes the starting columns as masses reckoned at a density of 2,700 for continental rock, then finds their thickness at 2,600. `tecto` starts from the cited thicknesses and takes the masses from its own densities.
@@ -141,8 +149,8 @@ version.go          the version
 cmd/tecto/          flags, calling the package, writing files
 internal/sphere/    grid, lookups, field operations
 internal/crust/     rock columns, thickness, density, isostasy, sea level
-internal/plates/    segmentation, velocity, motion, merge, rifting, subduction
-internal/erosion/   erosion
+internal/plates/    segmentation, velocity, motion, merge, rifting, subduction, arcs, collision
+internal/erosion/   erosion: which rock moves where
 internal/hexmap/    rotation and sampling to the hex raster
 ```
 
@@ -180,7 +188,9 @@ With no reference to compare against, each layer needs its own definition of cor
 | Segmentation | Every cell is in exactly one plate. Each plate is connected and no smaller than the minimum. |
 | Motion | Rotations stay orthonormal. A plate rotated by a known angle keeps its area and moves its centre by that angle. |
 | Merge, rifting, subduction | After a step every cell has crust. No mass is negative. Continental mass changes only by the amounts the step reports as created or destroyed. |
-| Erosion | Mass is conserved exactly. An isolated peak gets lower and its neighbours higher. A flat field does not change. |
+| Collision | Two continents that overlap by a narrow belt close at under a twentieth of the speed one was driven at, and the one that was met is carried along. Ocean floor under a continent, and plates that do not touch, change no rate. |
+| Arcs | The rock added above floor that sinks is the stated share of the floor's mass, and the account closes with it. |
+| Erosion | Mass is conserved exactly, for each kind of rock. An isolated peak gets lower and its neighbours higher. A flat field does not change. Rock under the sea does not move, and land wears to sea level, not to the sea floor. |
 | Whole run | The same seed gives the same file, byte for byte. Land fraction and height percentiles stay in stated ranges across twenty seeds. |
 | Ranges | High ground is nearer to convergent margins than land in general is, where a margin is a place one plate lies over another at the end of the run. High ground is elongated: its connected regions are longer than they are wide. |
 
@@ -204,7 +214,7 @@ Milestones 1, 2, and 3 are done.
    If the ranges are not clearly better, stop here.
    Through this milestone the package is alpha and untagged, and hamwold reaches it through a `replace` directive.
    If the decision is to go on, the package's exported names are taken as stable, the alpha label is dropped, and versions are tagged from then on (see WORKFLOW.md).
-5. **Erosion and tuning.** Erosion, then the constants: plate count, cycle length, ocean share, and smoothing lengths.
+5. **Tuning.** Erosion came in with milestone 4's second attempt, along with collision and arcs. What is left is the constants: collision drag, the arcs' share, the rate of erosion, plate count, cycle length, ocean share, and smoothing lengths.
    Try detail 7.
 6. **Hamwold integration.** Document the package and the file format, tag a version, and have hamwold require it in place of its `replace` directive.
 
@@ -218,7 +228,15 @@ Sizes, for scale: the upstream model code in scope is about 1,500 lines of JavaS
 - **One continent at the start.** The starting crust is one large landmass on most seeds, because a sum of cuts through the sphere's centre is dominated by its largest features. The plates are expected to break it up.
 - **The poles.** Hamwold covers everything beyond about 80° with ice. Whether the rotation should also keep large landmasses away from the poles is open.
 - **Plate speeds.** With rifting and subduction the plates no longer run away. At detail 6 over 500 Myr the fastest plate is typically moving at about 100 km per million years, which is the speed of Earth's fastest, with spells of 300 to 700. The slab constants are upstream's; they are something to tune in milestone 5 if the maps call for slower plates.
-- **Plateaus, not yet ranges.** Where continents meet, nothing stops one sliding over the other, so the doubled crust is as wide as the overlap: at 300 Myr about a tenth of the sphere is doubled, and by 500 Myr some is trebled and stands over 15 km high. The share of the sphere that is continental crust falls from 0.39 to about 0.29 over 500 Myr as it stacks. Accretion moves very little rock, a few hundredths of a percent of the continents, because crust dense enough to sink carries almost none. Whether the stacked margins read as ranges once hamwold has ranked them is the question for milestone 4; erosion in milestone 5 is what would spread them. A limit on how far continents can override each other is the first thing to try if they do not.
+- **Ranges, after a second attempt.** Made after the decision point's findings below, with three additions: continents that meet lock together, volcanic arcs, and erosion (see the departures). On the same five seeds:
+  - On the model's cells the high ground is 2.1 times as long as wide at 150 Myr, 2.4 at 300, and 2.9 at 500, where it was 1.9, 1.9, and 2.3.
+  - The share of the sphere where plates overlap is 0.04 to 0.06, where it was 0.06 to 0.13, and land stays at 0.38 of the sphere throughout, where it fell to 0.31.
+  - The highest cell is 6 to 13 km above the sea. Erosion bounds it, but it is still more than mountains stand; hamwold bends it over.
+  - Arcs add about 5% to the continental rock in 500 Myr.
+  - Hamwold was changed with it: it no longer ranks the mountains among all the land, but takes the model's rise above the general level of the continents as a height. Its mountain regions are then 3.4 to 3.5 times as long as wide and 320 to 520 km across, and nearly half the mountains are in regions at least three times as long as wide. From the fractured field they are 2.1 times as long as wide and 1,200 km across, with 15% in such regions, and the first attempt's plate maps were no better.
+  - Mountains are 1% of the land at 150 Myr, 2% at 300, and 6% at 500, against 14% from the fractured field. Starting islands are 4 to 7 a map, against 13.
+  - Still open: at 150 Myr, and on some seeds at 300, there are few ranges, because the plates have had little time to meet. Island arcs in the open ocean are faint. The constants (3,000, a tenth, 400 km² per million years) were set by eye on a few runs and are for milestone 5 to tune.
+- **Plateaus, not yet ranges.** *This is the model as it was before the second attempt above.* Where continents meet, nothing stops one sliding over the other, so the doubled crust is as wide as the overlap: at 300 Myr about a tenth of the sphere is doubled, and by 500 Myr some is trebled and stands over 15 km high. The share of the sphere that is continental crust falls from 0.39 to about 0.29 over 500 Myr as it stacks. Accretion moves very little rock, a few hundredths of a percent of the continents, because crust dense enough to sink carries almost none. Whether the stacked margins read as ranges once hamwold has ranked them is the question for milestone 4; erosion in milestone 5 is what would spread them. A limit on how far continents can override each other is the first thing to try if they do not.
 - **Resampling.** Reading the plates onto the world's grid gains or loses up to half a percent of the continental rock over 500 Myr at detail 6, and up to one percent at detail 5, with no trend either way.
 - **The decision point's findings.** Measured in milestone 4 on five seeds, through hamwold at its default size:
   - On the model's own cells the high ground grows longer for its width as the plates run: 1.6 at the start, 1.9 at 150 and 300 Myr, 2.3 at 500 Myr.

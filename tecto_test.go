@@ -230,7 +230,7 @@ func TestGenerateWithPlates(t *testing.T) {
 		if !(b.Start > 0 && b.Subducted >= b.Accreted && b.Accreted >= 0) {
 			t.Errorf("seed %d: continental rock: %+v", seed, b)
 		}
-		if sum := b.Start - b.Subducted + b.Accreted + b.Resampled; math.Abs(sum-b.End) > 1e-9*b.Start {
+		if sum := b.Start - b.Subducted + b.Accreted + b.Erupted + b.Resampled; math.Abs(sum-b.End) > 1e-9*b.Start {
 			t.Errorf("seed %d: continental rock ends at %v, but the account comes to %v", seed, b.End, sum)
 		}
 		if math.Abs(b.End-b.Start) > 0.05*b.Start {

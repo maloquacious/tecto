@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/maloquacious/tecto/internal/crust"
+	"github.com/maloquacious/tecto/internal/erosion"
 	"github.com/maloquacious/tecto/internal/sphere"
 )
 
@@ -29,7 +30,7 @@ const (
 )
 
 // Budget is an account of the world's continental rock, in kilograms. The
-// plates' rock is Start − Subducted + Accreted + Resampled at any time.
+// plates' rock is Start − Subducted + Accreted + Erupted + Resampled at any time.
 type Budget struct {
 	// Start is the continental rock the world began with.
 	Start float64
@@ -37,6 +38,9 @@ type Budget struct {
 	// edge, and Accreted the part of it that was added to the plate above.
 	// The rest, if there is any, is lost to the mantle.
 	Subducted, Accreted float64
+	// Erupted is the continental rock made new in volcanic arcs, above
+	// ocean floor that went down.
+	Erupted float64
 	// Resampled is the rock gained, or if below zero lost, when the
 	// plates' crust was read onto the world's grid: each time the plates
 	// were drawn afresh, and at the end. A cell of the world takes the
@@ -162,6 +166,9 @@ func (w *World) advance(myr float64, margins bool) error {
 	// neither depends on how the steps' lengths round when summed.
 	end := w.Time + myr
 	var rates []sphere.Vec3
+	// The world's crust as it was last put together, while the plates are
+	// still the ones it was put together from.
+	var merged *Merged
 	for w.Time < end {
 		until := end
 		if margins {
@@ -169,16 +176,21 @@ func (w *World) advance(myr float64, margins bool) error {
 				if err := w.redraw(); err != nil {
 					return err
 				}
+				merged = nil
 			}
 			until = min(until, w.drawn+CycleMyr)
 		}
 		step := min(until-w.Time, MaxStepMyr)
 		rates = rates[:0]
-		var fastest float64
 		for _, p := range w.Plates {
-			rate := p.AngularVelocity(w.Grid)
-			rates = append(rates, rate)
-			fastest = max(fastest, p.speed(w.Grid, rate))
+			rates = append(rates, p.AngularVelocity(w.Grid))
+		}
+		if merged != nil {
+			w.brake(merged, rates)
+		}
+		var fastest float64
+		for i, p := range w.Plates {
+			fastest = max(fastest, p.speed(w.Grid, rates[i]))
 		}
 		if math.IsNaN(fastest) || math.IsInf(fastest, 0) {
 			return fmt.Errorf("plates: step %d: a plate's speed is not finite", w.Steps)
@@ -191,7 +203,11 @@ func (w *World) advance(myr float64, margins bool) error {
 			p.turn(rates[i], step)
 		}
 		if margins {
-			w.margins(w.Merge())
+			merged = w.Merge()
+			if err := w.erode(merged, step); err != nil {
+				return fmt.Errorf("plates: step %d: %w", w.Steps, err)
+			}
+			w.margins(merged)
 			if err := w.check(); err != nil {
 				return err
 			}
@@ -202,6 +218,35 @@ func (w *World) advance(myr float64, margins bool) error {
 			w.Time = next
 		}
 		w.Steps++
+	}
+	return nil
+}
+
+// erode wears down the land for a time, in millions of years, given the
+// world's crust as Merge has just put it together.
+//
+// The rock that leaves a cell of the world is taken from every plate that
+// has crust there, each giving the same share of what it has, and lands on
+// the uppermost plate of the cell it goes to.
+func (w *World) erode(m *Merged, myr float64) error {
+	g := w.Grid
+	sea, err := crust.SeaLevel(crust.Elevations(m.Columns), g.Area, crust.OceanMeanDepth)
+	if err != nil {
+		return err
+	}
+	for _, f := range erosion.Flows(g, m.Columns, sea, myr) {
+		top := w.Plates[m.Top[f.To]]
+		onto := m.local[m.Top[f.To]][f.To]
+		for i, p := range w.Plates {
+			local := m.local[i][f.From]
+			if local < 0 {
+				continue
+			}
+			// The share is of the rock under the cell of the world, which
+			// is not the size of the plate's cell.
+			share := f.Share * g.Area[f.From] / g.Area[local]
+			erosion.Move(p.Crust[local], share, &p.Crust[local], g.Area[local], &top.Crust[onto], g.Area[onto])
+		}
 	}
 	return nil
 }

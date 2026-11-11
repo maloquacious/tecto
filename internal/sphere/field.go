@@ -69,12 +69,12 @@ func tangent(p Vec3) Vec3 {
 	return p.Cross(axis).Normalize()
 }
 
-// edgeWeights returns, for each cell and each of its neighbors in the order
+// EdgeWeights returns, for each cell and each of its neighbors in the order
 // of Neighbors, how strongly a difference between the two drives a flow
 // between them. A weight is the same seen from either end, which is what
 // makes Diffuse keep the field's mean. They are the cotangent weights of
 // the flat triangles of the mesh.
-func (g *Grid) edgeWeights() [][]float64 {
+func (g *Grid) EdgeWeights() [][]float64 {
 	weights := make([][]float64, len(g.Pos))
 	flat := make([]float64, len(g.Faces)*3)
 	for i, n := range g.Neighbors {
@@ -112,7 +112,7 @@ func (g *Grid) Diffuse(field []float64, sigma float64) []float64 {
 	if !(sigma > 0) {
 		return out
 	}
-	weights := g.edgeWeights()
+	weights := g.EdgeWeights()
 	// The largest step that leaves each cell's new value a mix of its own
 	// and its neighbors' old ones.
 	limit := math.Inf(1)

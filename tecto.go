@@ -96,7 +96,7 @@ type Summary struct {
 // Budget is an account of the world's continental rock over a run, in
 // kilograms: everything in the crust but the rock of the ocean floor, which
 // the mantle takes back and makes anew. End is Start − Subducted + Accreted
-// + Resampled, but for rounding.
+// + Erupted + Resampled, but for rounding.
 type Budget struct {
 	// Start is the rock the world began with, and End what it ended with.
 	Start, End float64
@@ -104,6 +104,9 @@ type Budget struct {
 	// plate, and Accreted the part of it that was scraped off onto the
 	// plate above.
 	Subducted, Accreted float64
+	// Erupted is the rock made new in volcanic arcs, above ocean floor
+	// that went into the mantle.
+	Erupted float64
 	// Resampled is the rock gained, or if below zero lost, in reading the
 	// plates' crust onto the model's cells, which does not keep the total
 	// exactly.
@@ -179,6 +182,7 @@ func Generate(p Params) (*Result, error) {
 			End:       b.End,
 			Subducted: b.Subducted,
 			Accreted:  b.Accreted,
+			Erupted:   b.Erupted,
 			Resampled: b.Resampled,
 		}
 	}
