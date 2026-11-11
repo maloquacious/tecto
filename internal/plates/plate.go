@@ -105,6 +105,13 @@ func (p *Plate) outline(g *sphere.Grid) {
 		drag[1] = drag[1].Add(sphere.Vec3{Y: 1}.Sub(r.Scale(r.Y)).Scale(a))
 		drag[2] = drag[2].Add(sphere.Vec3{Z: 1}.Sub(r.Scale(r.Z)).Scale(a))
 	}
+	p.edge = p.edge[:0]
+	if p.Area == 0 {
+		// A plate that has gone wholly into the mantle covers nothing, and
+		// no point is within its reach.
+		p.center, p.reach, p.drag = sphere.Vec3{Z: 1}, 2, sphere.Mat3{}
+		return
+	}
 	for i := range drag {
 		drag[i] = drag[i].Scale(1 / p.Area)
 	}
@@ -130,8 +137,6 @@ func (p *Plate) outline(g *sphere.Grid) {
 
 	// The mask rises going into the plate, so the way out is down its
 	// slope.
-	p.edge = p.edge[:0]
-	slope := g.Gradient(mask)
 	for cell, in := range p.Member {
 		if !in {
 			continue
@@ -143,8 +148,12 @@ func (p *Plate) outline(g *sphere.Grid) {
 				break
 			}
 		}
-		if steep := slope[cell].Len(); atEdge && steep > 0 {
-			p.edge = append(p.edge, edgeCell{int32(cell), slope[cell].Scale(-1 / steep)})
+		if !atEdge {
+			continue
+		}
+		slope := g.GradientAt(mask, int32(cell))
+		if steep := slope.Len(); steep > 0 {
+			p.edge = append(p.edge, edgeCell{int32(cell), slope.Scale(-1 / steep)})
 		}
 	}
 }
@@ -179,6 +188,21 @@ func (p *Plate) AngularVelocity(g *sphere.Grid) sphere.Vec3 {
 		return sphere.Vec3{}
 	}
 	return p.drag.Solve(torque.Scale(1 / pulling))
+}
+
+// speed returns the speed of the fastest part of the plate when it turns at
+// a rate, in radians per million years.
+func (p *Plate) speed(g *sphere.Grid, rate sphere.Vec3) float64 {
+	if rate == (sphere.Vec3{}) {
+		return 0
+	}
+	var fastest float64
+	for cell, in := range p.Member {
+		if in {
+			fastest = max(fastest, rate.Cross(g.Pos[cell]).Len())
+		}
+	}
+	return fastest
 }
 
 // turn moves the plate as it turns at a rate for a time, in millions of

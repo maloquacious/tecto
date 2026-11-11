@@ -24,31 +24,37 @@ func (g *Grid) Hops(km float64) int {
 // field rises fastest, whose length is the rise per radian.
 func (g *Grid) Gradient(field []float64) []Vec3 {
 	out := make([]Vec3, len(g.Pos))
-	for i, p := range g.Pos {
-		// Fit the neighbors' values, by least squares, with a slope in the
-		// plane that touches the sphere at the cell, which e1 and e2 span,
-		// and a bowl around the cell. The bowl takes up the part of the
-		// field's change that comes from the ground curving away from the
-		// plane, which would otherwise be read as slope wherever the
-		// neighbors are not evenly placed. A field that is linear in space
-		// is fitted exactly.
-		e1 := tangent(p)
-		e2 := p.Cross(e1)
-		var m Mat3
-		var rhs Vec3
-		for _, j := range g.Neighbors[i] {
-			d := g.Pos[j].Sub(p)
-			row := Vec3{d.Dot(e1), d.Dot(e2), d.Dot(d)}
-			df := field[j] - field[i]
-			m[0] = m[0].Add(row.Scale(row.X))
-			m[1] = m[1].Add(row.Scale(row.Y))
-			m[2] = m[2].Add(row.Scale(row.Z))
-			rhs = rhs.Add(row.Scale(df))
-		}
-		fit := m.Solve(rhs)
-		out[i] = e1.Scale(fit.X).Add(e2.Scale(fit.Y))
+	for i := range g.Pos {
+		out[i] = g.GradientAt(field, int32(i))
 	}
 	return out
+}
+
+// GradientAt returns the gradient of a field at one cell, as Gradient does
+// for all of them.
+func (g *Grid) GradientAt(field []float64, cell int32) Vec3 {
+	// Fit the neighbors' values, by least squares, with a slope in the
+	// plane that touches the sphere at the cell, which e1 and e2 span, and
+	// a bowl around the cell. The bowl takes up the part of the field's
+	// change that comes from the ground curving away from the plane, which
+	// would otherwise be read as slope wherever the neighbors are not
+	// evenly placed. A field that is linear in space is fitted exactly.
+	p := g.Pos[cell]
+	e1 := tangent(p)
+	e2 := p.Cross(e1)
+	var m Mat3
+	var rhs Vec3
+	for _, j := range g.Neighbors[cell] {
+		d := g.Pos[j].Sub(p)
+		row := Vec3{d.Dot(e1), d.Dot(e2), d.Dot(d)}
+		df := field[j] - field[cell]
+		m[0] = m[0].Add(row.Scale(row.X))
+		m[1] = m[1].Add(row.Scale(row.Y))
+		m[2] = m[2].Add(row.Scale(row.Z))
+		rhs = rhs.Add(row.Scale(df))
+	}
+	fit := m.Solve(rhs)
+	return e1.Scale(fit.X).Add(e2.Scale(fit.Y))
 }
 
 // tangent returns a vector of length one at right angles to p, which must

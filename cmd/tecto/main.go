@@ -91,8 +91,10 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 	s := r.Summary
 	fmt.Fprintf(stderr, "cells          %d\n", s.Cells)
 	if s.Plates > 0 {
-		fmt.Fprintf(stderr, "plates         %d, with gaps over %.3f of the sphere and overlaps over %.3f\n",
-			s.Plates, s.GapFraction, s.OverlapFraction)
+		fmt.Fprintf(stderr, "plates         %d, overlapping over %.3f of the sphere\n", s.Plates, s.OverlapFraction)
+		b := s.Continental
+		fmt.Fprintf(stderr, "continents     %.4g kg at the start: %.3f%% subducted, %.3f%% accreted, %+.3f%% from resampling, %.4g kg at the end\n",
+			b.Start, 100*b.Subducted/b.Start, 100*b.Accreted/b.Start, 100*b.Resampled/b.Start, b.End)
 	}
 	fmt.Fprintf(stderr, "land fraction  %.3f in %d landmasses\n", s.LandFraction, s.Landmasses)
 	fmt.Fprintf(stderr, "height, m      min %.0f, 5%% %.0f, 25%% %.0f, 50%% %.0f, 75%% %.0f, 95%% %.0f, max %.0f\n",

@@ -11,6 +11,7 @@
 package crust
 
 import (
+	"errors"
 	"fmt"
 	"math"
 )
@@ -89,24 +90,41 @@ func (c Column) Elevation() float64 {
 	return c.Thickness() - c.Mass()/MantleDensity
 }
 
-// Check returns an error if any column cannot be: a mass or age that is
+// Continental returns the mass of the column's continental rock, in
+// kilograms per square metre: everything but the mafic rock of the ocean
+// floor. The mantle takes ocean floor back and makes it anew, but this rock
+// stays at the surface, so the model keeps account of it.
+func (c Column) Continental() float64 {
+	return c.Sediment + c.Sedimentary + c.Metamorphic +
+		c.FelsicPlutonic + c.FelsicVolcanic
+}
+
+// Check returns an error if the column cannot be: a mass or age that is
 // negative or not finite, or no rock at all.
+func (c Column) Check() error {
+	for _, v := range [...]float64{
+		c.Sediment, c.Sedimentary, c.Metamorphic,
+		c.FelsicPlutonic, c.FelsicVolcanic,
+		c.MaficVolcanic, c.MaficPlutonic, c.Age,
+	} {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return fmt.Errorf("value is not finite: %+v", c)
+		}
+		if v < 0 {
+			return fmt.Errorf("value is negative: %+v", c)
+		}
+	}
+	if c.Mass() <= 0 {
+		return errors.New("no crust")
+	}
+	return nil
+}
+
+// Check returns an error if any column cannot be, as Column.Check finds.
 func Check(columns []Column) error {
 	for cell, c := range columns {
-		for _, v := range [...]float64{
-			c.Sediment, c.Sedimentary, c.Metamorphic,
-			c.FelsicPlutonic, c.FelsicVolcanic,
-			c.MaficVolcanic, c.MaficPlutonic, c.Age,
-		} {
-			if math.IsNaN(v) || math.IsInf(v, 0) {
-				return fmt.Errorf("crust: cell %d: value is not finite: %+v", cell, c)
-			}
-			if v < 0 {
-				return fmt.Errorf("crust: cell %d: value is negative: %+v", cell, c)
-			}
-		}
-		if c.Mass() <= 0 {
-			return fmt.Errorf("crust: cell %d has no crust", cell)
+		if err := c.Check(); err != nil {
+			return fmt.Errorf("crust: cell %d: %w", cell, err)
 		}
 	}
 	return nil

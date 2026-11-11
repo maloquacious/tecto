@@ -325,7 +325,7 @@ func TestMergeWherePlatesOverlapAndPart(t *testing.T) {
 				want = floor
 			default:
 				gap += g.Area[cell]
-				want = crust.NewOcean()
+				want = crust.Column{}
 				if m.Top[cell] != -1 {
 					t.Fatalf("cell %d: plate %d is on top of a gap", cell, m.Top[cell])
 				}
@@ -340,13 +340,14 @@ func TestMergeWherePlatesOverlapAndPart(t *testing.T) {
 		if math.Abs(m.Gap-gap/(4*math.Pi)) > 1e-12 || math.Abs(m.Overlap-overlap/(4*math.Pi)) > 1e-12 {
 			t.Errorf("gap %v and overlap %v, want %v and %v", m.Gap, m.Overlap, gap/(4*math.Pi), overlap/(4*math.Pi))
 		}
-		if err := crust.Check(m.Columns); err != nil {
-			t.Error(err)
+		if err := crust.Check(m.Columns); err == nil {
+			t.Error("crust with gaps in it passes the check")
 		}
 	}
 }
 
-// The plates drift for 150 million years.
+// The plates drift for 150 million years, with nothing done at their
+// margins.
 func TestPlatesDrift(t *testing.T) {
 	g := mustGrid(t, 4)
 	for seed := range uint64(5) {
@@ -357,7 +358,7 @@ func TestPlatesDrift(t *testing.T) {
 			areas[i] = p.Area
 		}
 		const myr = 150
-		if err := w.Advance(myr); err != nil {
+		if err := w.drift(myr); err != nil {
 			t.Fatal(err)
 		}
 		if w.Steps < myr/MaxStepMyr {
@@ -397,15 +398,12 @@ func TestPlatesDrift(t *testing.T) {
 			t.Errorf("seed %d: %d of %d plates moved", seed, moved, len(w.Plates))
 		}
 		m := w.Merge()
-		if err := crust.Check(m.Columns); err != nil {
-			t.Errorf("seed %d: %v", seed, err)
-		}
 		if m.Gap <= 0 || m.Overlap <= 0 || m.Gap+m.Overlap >= 1 {
 			t.Errorf("seed %d: gap %v and overlap %v", seed, m.Gap, m.Overlap)
 		}
 
 		again := New(g, columns)
-		if err := again.Advance(myr); err != nil {
+		if err := again.drift(myr); err != nil {
 			t.Fatal(err)
 		}
 		if !slices.Equal(again.Merge().Columns, m.Columns) {

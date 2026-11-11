@@ -23,8 +23,9 @@ Its one customer is the world map generator in Hāmwold (`github.com/mdhender/ha
   // SPDX-License-Identifier: AGPL-3.0-or-later
   ```
 
-- Milestones 1 and 2 of the plan are in place: the grid, the starting crust, sea level, sampling to the hex map, and plates that are segmented, move, and are merged back into one crust.
-  Nothing yet makes crust where plates part or consumes it where they meet, so a run with time in it has gaps and overlaps, which `Generate` reports in its summary.
+- Milestones 1, 2, and 3 of the plan are in place: the grid, the starting crust, sea level, sampling to the hex map, and plates that are segmented, move, rift, subduct, accrete, and are redrawn every 150 Myr.
+  Every cell has crust after every step, and `Generate` reports an account of the continental rock in its summary.
+  Milestone 4, the decision point, is next.
 
 ## What it is for
 
@@ -52,13 +53,13 @@ The algorithms come from the lithosphere model of [tectonics.js](https://github.
 
 ## Layout
 
-Planned, and created as each part is first needed. `internal/erosion` does not exist yet, and `internal/plates` has no rifting or subduction:
+Planned, and created as each part is first needed. `internal/erosion` does not exist yet:
 
 - The root package, `tecto`, is the public surface: the parameters, `Generate`, and the result. Its exported names are a promise to Hāmwold; keep them few.
 - `cmd/tecto` parses flags, calls the package, and writes files. It holds no logic of its own.
 - `internal/sphere` is the icosahedral grid, its lookups, and the field operations.
 - `internal/crust` is rock columns, thickness, density, isostasy, and sea level.
-- `internal/plates` is segmentation, velocity, motion, merging, rifting, and subduction.
+- `internal/plates` is segmentation, velocity, motion, merging, rifting, subduction, accretion, and the cycle.
 - `internal/erosion` is erosion.
 - `internal/hexmap` rotates the sphere and samples it onto Hāmwold's hex raster.
 - `tmp/` holds build output and scratch files. It is git-ignored.

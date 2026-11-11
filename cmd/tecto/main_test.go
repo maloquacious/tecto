@@ -170,7 +170,7 @@ func TestRunSummary(t *testing.T) {
 	if err := run(t.Context(), append(smallWorld, "--myr", "50"), &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"50 Myr", "plates         ", "gaps over", "overlaps over"} {
+	for _, want := range []string{"50 Myr", "plates         ", "overlapping over", "subducted", "accreted"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary of a run of 50 Myr lacks %q:\n%s", want, out.String())
 		}

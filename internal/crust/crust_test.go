@@ -272,3 +272,19 @@ func TestBuoyancy(t *testing.T) {
 		t.Errorf("a continent: buoyancy %v, want 0", got)
 	}
 }
+
+func TestContinentalLeavesOutTheOceanFloor(t *testing.T) {
+	c := Column{Sediment: 1, Sedimentary: 2, Metamorphic: 4, FelsicPlutonic: 8, FelsicVolcanic: 16, MaficVolcanic: 32, MaficPlutonic: 64, Age: 100}
+	if got := c.Continental(); got != 31 {
+		t.Errorf("continental rock %v, want 31", got)
+	}
+	if got := NewOcean().Continental(); got != 0 {
+		t.Errorf("new ocean floor holds %v of continental rock", got)
+	}
+	if err := c.Check(); err != nil {
+		t.Error(err)
+	}
+	if err := (Column{}).Check(); err == nil {
+		t.Error("a column with no rock passes the check")
+	}
+}

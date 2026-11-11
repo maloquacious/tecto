@@ -70,14 +70,32 @@ type Summary struct {
 	// the highest, and the heights below which 5%, 25%, 50%, 75%, and 95%
 	// of the cells lie.
 	Min, P5, P25, P50, P75, P95, Max float64
-	// Plates is the number of plates the crust was divided into. It is
-	// zero when the plates were not run.
+	// Plates is the number of plates the crust was divided into at the end
+	// of the run. It is zero when the plates were not run.
 	Plates int
-	// GapFraction is the share of the sphere that no plate covered at the
-	// end of the run, and OverlapFraction the share that more than one
-	// did. The model does not yet make new crust where plates part, nor
-	// consume it where they meet, so both grow as the plates run.
-	GapFraction, OverlapFraction float64
+	// OverlapFraction is the share of the sphere on which one plate lay
+	// over another at the end of the run. That is where crust is stacked.
+	OverlapFraction float64
+	// Continental accounts for the world's continental rock over the run.
+	// It is all zero when the plates were not run.
+	Continental Budget
+}
+
+// Budget is an account of the world's continental rock over a run, in
+// kilograms: everything in the crust but the rock of the ocean floor, which
+// the mantle takes back and makes anew. End is Start − Subducted + Accreted
+// + Resampled, but for rounding.
+type Budget struct {
+	// Start is the rock the world began with, and End what it ended with.
+	Start, End float64
+	// Subducted is the rock that went into the mantle with the edge of a
+	// plate, and Accreted the part of it that was scraped off onto the
+	// plate above.
+	Subducted, Accreted float64
+	// Resampled is the rock gained, or if below zero lost, in reading the
+	// plates' crust onto the model's cells, which does not keep the total
+	// exactly.
+	Resampled float64
 }
 
 func (p Params) withDefaults() (Params, error) {
@@ -136,9 +154,16 @@ func Generate(p Params) (*Result, error) {
 		if err := crust.Check(columns); err != nil {
 			return nil, err
 		}
-		summary.Plates = len(world.Plates)
-		summary.GapFraction = merged.Gap
+		b := world.Budget(merged)
+		summary.Plates = world.Count()
 		summary.OverlapFraction = merged.Overlap
+		summary.Continental = Budget{
+			Start:     b.Start,
+			End:       b.End,
+			Subducted: b.Subducted,
+			Accreted:  b.Accreted,
+			Resampled: b.Resampled,
+		}
 	}
 
 	height := crust.Elevations(columns)

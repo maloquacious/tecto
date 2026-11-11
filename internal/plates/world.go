@@ -6,6 +6,8 @@ package plates
 import (
 	"fmt"
 	"math"
+	"runtime"
+	"sync"
 
 	"github.com/maloquacious/tecto/internal/crust"
 	"github.com/maloquacious/tecto/internal/sphere"
@@ -19,7 +21,31 @@ const (
 	// stepCells is the furthest the fastest plate may move in a step, in
 	// cell spacings.
 	stepCells = 0.5
+	// CycleMyr is how long a set of plates lasts, in millions of years.
+	// When it is over the plates are discarded and drawn afresh from the
+	// crust as it then is. It is the length tectonics.js gives its
+	// supercontinent cycle.
+	CycleMyr = 150.0
 )
+
+// Budget is an account of the world's continental rock, in kilograms. The
+// plates' rock is Start − Subducted + Accreted + Resampled at any time.
+type Budget struct {
+	// Start is the continental rock the world began with.
+	Start float64
+	// Subducted is the continental rock that went down with a plate's
+	// edge, and Accreted the part of it that was added to the plate above.
+	// The rest, if there is any, is lost to the mantle.
+	Subducted, Accreted float64
+	// Resampled is the rock gained, or if below zero lost, when the
+	// plates' crust was read onto the world's grid: each time the plates
+	// were drawn afresh, and at the end. A cell of the world takes the
+	// crust of the nearest cell of a plate, which does not keep the total
+	// exactly.
+	Resampled float64
+	// End is the continental rock in the world's crust at the end.
+	End float64
+}
 
 // World is the plates of a world, on one grid.
 type World struct {
@@ -27,55 +53,170 @@ type World struct {
 	Plates []*Plate
 	// Steps is the number of steps taken so far.
 	Steps int
-	// Fastest is the highest rate any plate has turned at, in radians per
-	// million years. No part of a plate has moved faster than this.
+	// Fastest is the highest speed any part of a plate has moved at, in
+	// radians per million years.
 	Fastest float64
+	// Time is how long the plates have run, in millions of years, and
+	// Cycles the number of times they have been drawn afresh.
+	Time   float64
+	Cycles int
+
+	// drawn is the time at which the present plates were drawn.
+	drawn  float64
+	budget Budget
 }
 
 // New divides the crust into plates.
 func New(g *sphere.Grid, columns []crust.Column) *World {
-	owner, count := Segment(g, columns)
 	w := &World{Grid: g}
+	w.draw(columns)
+	w.budget.Start = continental(g, columns, nil)
+	return w
+}
+
+// draw replaces the plates with ones made from the world's crust.
+func (w *World) draw(columns []crust.Column) {
+	owner, count := Segment(w.Grid, columns)
+	w.Plates = w.Plates[:0]
 	for id := range int32(count) {
 		member := make([]bool, len(owner))
 		for cell, o := range owner {
 			member[cell] = o == id
 		}
-		w.Plates = append(w.Plates, newPlate(g, member, columns))
+		w.Plates = append(w.Plates, newPlate(w.Grid, member, columns))
 	}
-	return w
+	w.drawn = w.Time
 }
 
-// Advance moves the plates for a time, in millions of years. It chooses its
+// redraw ends a cycle: it puts the world's crust together and divides it
+// into plates again.
+func (w *World) redraw() error {
+	m := w.Merge()
+	if err := crust.Check(m.Columns); err != nil {
+		return fmt.Errorf("plates: step %d: %w", w.Steps, err)
+	}
+	before := w.continental()
+	w.draw(m.Columns)
+	w.budget.Resampled += w.continental() - before
+	w.Cycles++
+	return nil
+}
+
+// metres2 is the area, in square metres, of a steradian of the world.
+const metres2 = sphere.RadiusKm * sphere.RadiusKm * 1e6
+
+// continental returns the continental rock in the cells chosen, or in all
+// of them if member is nil, in kilograms.
+func continental(g *sphere.Grid, columns []crust.Column, member []bool) float64 {
+	var sum float64
+	for cell, c := range columns {
+		if member == nil || member[cell] {
+			sum += c.Continental() * g.Area[cell]
+		}
+	}
+	return sum * metres2
+}
+
+// continental returns the continental rock in all the plates, in kilograms.
+func (w *World) continental() float64 {
+	var sum float64
+	for _, p := range w.Plates {
+		sum += continental(w.Grid, p.Crust, p.Member)
+	}
+	return sum
+}
+
+// Count returns the number of plates that have any crust left.
+func (w *World) Count() int {
+	n := 0
+	for _, p := range w.Plates {
+		if p.Area > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+// Budget returns the account of the world's continental rock, closed with
+// the crust that Merge has just put together.
+func (w *World) Budget(m *Merged) Budget {
+	b := w.budget
+	b.End = continental(w.Grid, m.Columns, nil)
+	b.Resampled += b.End - w.continental()
+	return b
+}
+
+// Advance runs the plates for a time, in millions of years. It chooses its
 // own steps: short enough that the fastest plate moves less than a cell in
-// each.
-func (w *World) Advance(myr float64) error {
-	rates := make([]sphere.Vec3, len(w.Plates))
-	for myr > 0 {
+// each. After each step it makes new ocean floor where plates have parted
+// and takes away the edges of plates that have sunk under others, and every
+// CycleMyr it draws the plates afresh.
+func (w *World) Advance(myr float64) error { return w.advance(myr, true) }
+
+// drift moves the plates as Advance does, and does nothing else: no crust
+// is made or taken away, and the plates are never drawn afresh.
+func (w *World) drift(myr float64) error { return w.advance(myr, false) }
+
+func (w *World) advance(myr float64, margins bool) error {
+	// Steps end exactly on the end of the run and of each cycle, so that
+	// neither depends on how the steps' lengths round when summed.
+	end := w.Time + myr
+	var rates []sphere.Vec3
+	for w.Time < end {
+		until := end
+		if margins {
+			if w.Time >= w.drawn+CycleMyr {
+				if err := w.redraw(); err != nil {
+					return err
+				}
+			}
+			until = min(until, w.drawn+CycleMyr)
+		}
+		step := min(until-w.Time, MaxStepMyr)
+		rates = rates[:0]
 		var fastest float64
-		for i, p := range w.Plates {
-			rates[i] = p.AngularVelocity(w.Grid)
-			fastest = max(fastest, rates[i].Len())
+		for _, p := range w.Plates {
+			rate := p.AngularVelocity(w.Grid)
+			rates = append(rates, rate)
+			fastest = max(fastest, p.speed(w.Grid, rate))
 		}
 		if math.IsNaN(fastest) || math.IsInf(fastest, 0) {
 			return fmt.Errorf("plates: step %d: a plate's speed is not finite", w.Steps)
 		}
 		w.Fastest = max(w.Fastest, fastest)
-		step := min(myr, MaxStepMyr)
 		if fastest > 0 {
 			step = min(step, stepCells*w.Grid.Spacing()/fastest)
 		}
 		for i, p := range w.Plates {
 			p.turn(rates[i], step)
 		}
-		// The last step takes all that is left, so the loop ends whatever
-		// rounding does to the subtraction.
-		if step == myr {
-			myr = 0
+		if margins {
+			w.margins(w.Merge())
+			if err := w.check(); err != nil {
+				return err
+			}
+		}
+		if next := w.Time + step; step == until-w.Time || next >= until {
+			w.Time = until
 		} else {
-			myr -= step
+			w.Time = next
 		}
 		w.Steps++
+	}
+	return nil
+}
+
+// check returns an error if any plate holds crust that cannot be.
+func (w *World) check() error {
+	for i, p := range w.Plates {
+		for cell, in := range p.Member {
+			if !in {
+				continue
+			}
+			if err := p.Crust[cell].Check(); err != nil {
+				return fmt.Errorf("plates: step %d: plate %d, cell %d: %w", w.Steps, i, cell, err)
+			}
+		}
 	}
 	return nil
 }
@@ -92,6 +233,10 @@ type Merged struct {
 	// Gap is the share of the sphere that no plate covers, and Overlap the
 	// share that more than one does.
 	Gap, Overlap float64
+
+	// local has, for each plate, the cell of the plate that lies over each
+	// cell of the world, or -1 where the plate does not reach.
+	local [][]int32
 }
 
 // Merge puts the world's crust together from the plates, as they lie now.
@@ -100,7 +245,7 @@ type Merged struct {
 // the age of the crust are the uppermost plate's, and the lower plate's
 // ocean floor is taken to have gone down into the mantle; continental rock
 // from every plate there is stacked. Where the plates have parted and none
-// covers a cell, the cell is given new ocean crust.
+// covers a cell, the cell has no crust.
 func (w *World) Merge() *Merged {
 	g := w.Grid
 	n := len(g.Pos)
@@ -108,6 +253,10 @@ func (w *World) Merge() *Merged {
 		Columns: make([]crust.Column, n),
 		Top:     make([]int32, n),
 		Count:   make([]int32, n),
+		local:   make([][]int32, len(w.Plates)),
+	}
+	for i := range m.local {
+		m.local[i] = make([]int32, n)
 	}
 	// For each plate, where its middle is in the world, and the rotation
 	// from the world back to its grid.
@@ -117,43 +266,62 @@ func (w *World) Merge() *Merged {
 		centers[i] = p.Rot.Apply(p.center)
 		back[i] = p.Rot.Transpose()
 	}
-	for cell, pos := range g.Pos {
-		top, lightest := int32(-1), math.Inf(1)
-		var column crust.Column
-		for i, p := range w.Plates {
-			if pos.Dot(centers[i]) < p.reach {
-				continue
+	// Each cell of the world is worked out on its own, so the cells are
+	// shared among the processors. The result does not depend on how.
+	workers := min(runtime.GOMAXPROCS(0), n)
+	var wg sync.WaitGroup
+	for worker := range workers {
+		wg.Go(func() {
+			for cell := worker * n / workers; cell < (worker+1)*n/workers; cell++ {
+				w.mergeCell(m, centers, back, cell)
 			}
-			local := g.Nearest(back[i].Apply(pos))
-			if !p.Member[local] {
-				continue
-			}
-			c := p.Crust[local]
-			m.Count[cell]++
-			column.Sediment += c.Sediment
-			column.Sedimentary += c.Sedimentary
-			column.Metamorphic += c.Metamorphic
-			column.FelsicPlutonic += c.FelsicPlutonic
-			column.FelsicVolcanic += c.FelsicVolcanic
-			if d := c.Density(); d < lightest {
-				top, lightest = int32(i), d
-				column.MaficVolcanic = c.MaficVolcanic
-				column.MaficPlutonic = c.MaficPlutonic
-				column.Age = c.Age
-			}
-		}
-		m.Top[cell] = top
-		switch m.Count[cell] {
+		})
+	}
+	wg.Wait()
+	for cell, count := range m.Count {
+		switch count {
 		case 0:
-			column = crust.NewOcean()
 			m.Gap += g.Area[cell]
 		case 1:
 		default:
 			m.Overlap += g.Area[cell]
 		}
-		m.Columns[cell] = column
 	}
 	m.Gap /= 4 * math.Pi
 	m.Overlap /= 4 * math.Pi
 	return m
+}
+
+// mergeCell puts together the crust of one cell of the world.
+func (w *World) mergeCell(m *Merged, centers []sphere.Vec3, back []sphere.Mat3, cell int) {
+	g := w.Grid
+	pos := g.Pos[cell]
+	top, lightest := int32(-1), math.Inf(1)
+	var column crust.Column
+	for i, p := range w.Plates {
+		m.local[i][cell] = -1
+		if pos.Dot(centers[i]) < p.reach {
+			continue
+		}
+		local := g.Nearest(back[i].Apply(pos))
+		if !p.Member[local] {
+			continue
+		}
+		m.local[i][cell] = local
+		c := p.Crust[local]
+		m.Count[cell]++
+		column.Sediment += c.Sediment
+		column.Sedimentary += c.Sedimentary
+		column.Metamorphic += c.Metamorphic
+		column.FelsicPlutonic += c.FelsicPlutonic
+		column.FelsicVolcanic += c.FelsicVolcanic
+		if d := c.Density(); d < lightest {
+			top, lightest = int32(i), d
+			column.MaficVolcanic = c.MaficVolcanic
+			column.MaficPlutonic = c.MaficPlutonic
+			column.Age = c.Age
+		}
+	}
+	m.Top[cell] = top
+	m.Columns[cell] = column
 }

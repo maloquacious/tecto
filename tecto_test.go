@@ -184,14 +184,13 @@ func TestGenerateAtZeroDoesNotRunThePlates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := r.Summary; s.Plates != 0 || s.GapFraction != 0 || s.OverlapFraction != 0 {
+	if s := r.Summary; s.Plates != 0 || s.OverlapFraction != 0 || s.Continental != (Budget{}) {
 		t.Errorf("a run of no time reports plates: %+v", s)
 	}
 }
 
-// The plates drift: a run with time in it is repeatable, differs from the
-// starting crust, and reports how much of the sphere the plates have left
-// bare or doubled.
+// A run with time in it is repeatable, differs from the starting crust,
+// leaves no cell without crust, and accounts for its continental rock.
 func TestGenerateWithPlates(t *testing.T) {
 	for seed := range uint64(5) {
 		start, err := Generate(small(seed))
@@ -223,8 +222,18 @@ func TestGenerateWithPlates(t *testing.T) {
 		if s.Plates < 2 || s.Plates > 7 {
 			t.Errorf("seed %d: %d plates, want 2 to 7", seed, s.Plates)
 		}
-		if !(s.GapFraction > 0 && s.OverlapFraction > 0 && s.GapFraction+s.OverlapFraction < 1) {
-			t.Errorf("seed %d: gaps over %v of the sphere and overlaps over %v", seed, s.GapFraction, s.OverlapFraction)
+		if !(s.OverlapFraction > 0 && s.OverlapFraction < 0.5) {
+			t.Errorf("seed %d: overlaps over %v of the sphere", seed, s.OverlapFraction)
+		}
+		b := s.Continental
+		if !(b.Start > 0 && b.Subducted >= b.Accreted && b.Accreted >= 0) {
+			t.Errorf("seed %d: continental rock: %+v", seed, b)
+		}
+		if sum := b.Start - b.Subducted + b.Accreted + b.Resampled; math.Abs(sum-b.End) > 1e-9*b.Start {
+			t.Errorf("seed %d: continental rock ends at %v, but the account comes to %v", seed, b.End, sum)
+		}
+		if math.Abs(b.End-b.Start) > 0.05*b.Start {
+			t.Errorf("seed %d: continental rock went from %v to %v", seed, b.Start, b.End)
 		}
 		if s.LandFraction <= 0 || s.LandFraction >= 1 || s.Landmasses < 1 {
 			t.Errorf("seed %d: land fraction %v in %d landmasses", seed, s.LandFraction, s.Landmasses)
@@ -233,13 +242,13 @@ func TestGenerateWithPlates(t *testing.T) {
 			t.Errorf("seed %d: percentiles out of order: %+v", seed, s)
 		}
 
-		// A very short run moves nothing far, and leaves almost no gaps.
+		// A very short run moves nothing far.
 		p.Myr = 0.5
 		brief, err := Generate(p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if b := brief.Summary; b.Plates != s.Plates || b.GapFraction > 0.05 || b.OverlapFraction > 0.05 {
+		if b := brief.Summary; b.Plates < 2 || b.Plates > 7 || b.OverlapFraction > 0.05 {
 			t.Errorf("seed %d: after half a million years: %+v", seed, b)
 		}
 	}
