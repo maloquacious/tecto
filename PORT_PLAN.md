@@ -115,6 +115,9 @@ These are decided now, because nothing obliges the Go to repeat them.
 - **Arithmetic.** `float64` for calculation; `float32` only for stored fields if memory calls for it.
 - **Plate velocity.** Upstream calls its own velocity model mostly wrong, and negates a rotation without knowing why. Implement it as written first, since it is known to produce moving plates, then fix the sign by derivation and test.
 - **A plain copy bug.** Upstream's `RockColumn` sets `mafic_plutonic` from `mafic_volcanic`, so new ocean crust is doubled. Not repeated.
+- **Smooth cuts.** Upstream spreads each of the initial terrain's cuts over about 40 km, less than a cell, so its field is whole numbers and cells of equal rank are ordered by cell id. `tecto` spreads a cut over 250 km, about the smallest feature it is meant to supply, so the field is continuous at any detail.
+- **Thicknesses, not masses, for the starting crust.** Upstream writes the starting columns as masses reckoned at a density of 2,700 for continental rock, then finds their thickness at 2,600. `tecto` starts from the cited thicknesses and takes the masses from its own densities.
+- **Sea level by area.** The sea's mean depth weighs each cell by its area, and the bisection runs until it can go no further, not for ten steps.
 - **No caches.** Upstream's `Memo` and its display-speed thresholds exist for the browser. Derived fields are recomputed where they are needed, in a fixed order.
 
 ## Layout
@@ -197,6 +200,8 @@ Sizes, for scale: the upstream model code in scope is about 1,500 lines of JavaS
 
 - **Starting islands.** Hamwold needs islands of 150 to 1,800 hexes, which is 6 to 78 cells at detail 6. The model will make few of them. They may have to come from hamwold's noise, or from a pass that adds island arcs along ocean margins.
 - **Land fraction.** The model is set up for Earth's share of continental crust, about 40%, and hamwold floods to 35% land. If the flood has to cut far into the continents or far out onto the ocean floor, the initial ocean share needs to follow hamwold's parameter.
+- **The starting crust's height.** With upstream's ocean volume, the starting continents float about 1,800 m above the sea and the ocean floor lies about 3,200 m below it, with little in between. Hamwold uses only the order of the heights, so this does not matter to it yet. It is a constant to look at in milestone 5.
+- **One continent at the start.** The starting crust is one large landmass on most seeds, because a sum of cuts through the sphere's centre is dominated by its largest features. The plates are expected to break it up.
 - **The poles.** Hamwold covers everything beyond about 80° with ice. Whether the rotation should also keep large landmasses away from the poles is open.
 - **How long to run.** Whether maps are best at one supercontinent cycle, several, or part of one is a question for milestone 4.
 

@@ -23,7 +23,7 @@ Its one customer is the world map generator in Hāmwold (`github.com/mdhender/ha
   // SPDX-License-Identifier: AGPL-3.0-or-later
   ```
 
-- The project is greenfield. There is a plan, a version, and no model code yet.
+- Milestone 1 of the plan is in place: the grid, the starting crust, sea level, and sampling to the hex map. The plates do not move yet, so `Generate` accepts only zero for the simulated time.
 
 ## What it is for
 
@@ -51,7 +51,7 @@ The algorithms come from the lithosphere model of [tectonics.js](https://github.
 
 ## Layout
 
-Planned, and created as each part is first needed:
+Planned, and created as each part is first needed. `internal/plates` and `internal/erosion` do not exist yet:
 
 - The root package, `tecto`, is the public surface: the parameters, `Generate`, and the result. Its exported names are a promise to Hāmwold; keep them few.
 - `cmd/tecto` parses flags, calls the package, and writes files. It holds no logic of its own.
