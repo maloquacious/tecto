@@ -59,8 +59,10 @@ func RandomRanks(pos []sphere.Vec3, rng *rand.Rand) []float64 {
 // which is near the 0.35 that Hāmwold floods its maps to, so Hāmwold's
 // coast runs close to the model's. With seven tenths the model's land is
 // 0.30, and Hāmwold must make up the rest out of ocean floor: its maps then
-// have more islands and a third fewer mountains. With five tenths they
-// have few islands. So the share stays.
+// have a third fewer mountains. With five tenths the model's land is 0.47,
+// and Hāmwold must drown a quarter of it, so its coast is no longer the
+// model's; its maps had somewhat more mountains on the eight seeds tried,
+// and that has not been tried again with the other constants settled.
 const (
 	OceanShare         = 0.6
 	oceanMeanElevation = -4019.0
