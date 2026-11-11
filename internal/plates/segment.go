@@ -8,7 +8,8 @@
 // (https://github.com/davidson16807/tectonics.js), which is licensed under
 // CC BY 4.0. This is a new implementation of its algorithms, not a
 // translation of its code, and it departs from them where PORT_PLAN.md
-// says so.
+// says so. The locking of continents that meet and the volcanic arcs are not
+// from tectonics.js at all.
 package plates
 
 import (
