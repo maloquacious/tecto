@@ -97,6 +97,11 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 			b.Start, 100*b.Subducted/b.Start, 100*b.Accreted/b.Start, 100*b.Resampled/b.Start, b.End)
 	}
 	fmt.Fprintf(stderr, "land fraction  %.3f in %d landmasses\n", s.LandFraction, s.Landmasses)
+	fmt.Fprintf(stderr, "high ground    %.2f times as long as wide", s.HighGroundElongation)
+	if s.Plates > 0 {
+		fmt.Fprintf(stderr, ", %.0f km from a plate margin, where land is %.0f km", s.HighGroundToMarginKm, s.LandToMarginKm)
+	}
+	fmt.Fprintln(stderr)
 	fmt.Fprintf(stderr, "height, m      min %.0f, 5%% %.0f, 25%% %.0f, 50%% %.0f, 75%% %.0f, 95%% %.0f, max %.0f\n",
 		s.Min, s.P5, s.P25, s.P50, s.P75, s.P95, s.Max)
 

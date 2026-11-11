@@ -76,6 +76,18 @@ type Summary struct {
 	// OverlapFraction is the share of the sphere on which one plate lay
 	// over another at the end of the run. That is where crust is stacked.
 	OverlapFraction float64
+	// HighGroundElongation says how long the high ground is for its width,
+	// where high ground is the highest tenth of the land: 1 for round
+	// massifs, and more for ranges. It is the mean over the connected
+	// pieces of high ground of at least 100,000 km², each counting by its
+	// area, of a piece's length over its width, and zero if there are none.
+	HighGroundElongation float64
+	// HighGroundToMarginKm is the mean distance, in kilometres, from high
+	// ground to the nearest place where one plate lay over another at the
+	// end of the run, and LandToMarginKm the same for all land. Ranges that
+	// the plates made lie nearer the margins than land in general does.
+	// Both are zero when the plates were not run or nowhere overlapped.
+	HighGroundToMarginKm, LandToMarginKm float64
 	// Continental accounts for the world's continental rock over the run.
 	// It is all zero when the plates were not run.
 	Continental Budget
@@ -144,6 +156,7 @@ func Generate(p Params) (*Result, error) {
 	}
 
 	var summary Summary
+	var margin []bool
 	if p.Myr > 0 {
 		world := plates.New(g, columns)
 		if err := world.Advance(p.Myr); err != nil {
@@ -153,6 +166,10 @@ func Generate(p Params) (*Result, error) {
 		columns = merged.Columns
 		if err := crust.Check(columns); err != nil {
 			return nil, err
+		}
+		margin = make([]bool, len(merged.Count))
+		for cell, count := range merged.Count {
+			margin[cell] = count > 1
 		}
 		b := world.Budget(merged)
 		summary.Plates = world.Count()
@@ -173,6 +190,17 @@ func Generate(p Params) (*Result, error) {
 	}
 	for i := range height {
 		height[i] -= sea
+	}
+
+	high := highGround(g, height)
+	summary.HighGroundElongation = elongation(g, high)
+	if margin != nil {
+		land := make([]bool, len(height))
+		for cell, h := range height {
+			land[cell] = h > 0
+		}
+		summary.HighGroundToMarginKm = meanDistanceKm(g, margin, high)
+		summary.LandToMarginKm = meanDistanceKm(g, margin, land)
 	}
 
 	center, landmasses := largestLandmass(g, height)

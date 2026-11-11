@@ -182,7 +182,7 @@ With no reference to compare against, each layer needs its own definition of cor
 | Merge, rifting, subduction | After a step every cell has crust. No mass is negative. Continental mass changes only by the amounts the step reports as created or destroyed. |
 | Erosion | Mass is conserved exactly. An isolated peak gets lower and its neighbours higher. A flat field does not change. |
 | Whole run | The same seed gives the same file, byte for byte. Land fraction and height percentiles stay in stated ranges across twenty seeds. |
-| Ranges | High ground is nearer to convergent margins than land in general is. High ground is elongated: its connected regions are longer than they are wide. |
+| Ranges | High ground is nearer to convergent margins than land in general is, where a margin is a place one plate lies over another at the end of the run. High ground is elongated: its connected regions are longer than they are wide. |
 
 The last row is the test that the tectonics are doing their job.
 The two measures are computed by a test helper and reported in the run summary, so they can be tracked as the model changes.
@@ -220,6 +220,12 @@ Sizes, for scale: the upstream model code in scope is about 1,500 lines of JavaS
 - **Plate speeds.** With rifting and subduction the plates no longer run away. At detail 6 over 500 Myr the fastest plate is typically moving at about 100 km per million years, which is the speed of Earth's fastest, with spells of 300 to 700. The slab constants are upstream's; they are something to tune in milestone 5 if the maps call for slower plates.
 - **Plateaus, not yet ranges.** Where continents meet, nothing stops one sliding over the other, so the doubled crust is as wide as the overlap: at 300 Myr about a tenth of the sphere is doubled, and by 500 Myr some is trebled and stands over 15 km high. The share of the sphere that is continental crust falls from 0.39 to about 0.29 over 500 Myr as it stacks. Accretion moves very little rock, a few hundredths of a percent of the continents, because crust dense enough to sink carries almost none. Whether the stacked margins read as ranges once hamwold has ranked them is the question for milestone 4; erosion in milestone 5 is what would spread them. A limit on how far continents can override each other is the first thing to try if they do not.
 - **Resampling.** Reading the plates onto the world's grid gains or loses up to half a percent of the continental rock over 500 Myr at detail 6, and up to one percent at detail 5, with no trend either way.
+- **The decision point's findings.** Measured in milestone 4 on five seeds, through hamwold at its default size:
+  - On the model's own cells the high ground grows longer for its width as the plates run: 1.6 at the start, 1.9 at 150 and 300 Myr, 2.3 at 500 Myr.
+  - On hamwold's maps it does not. Mountain regions are about twice as long as wide from the fractured field and from the plate model at any age. Hamwold ranks the heights, which flattens a plateau of doubled crust, and then its own noise decides where in the plateau the mountains go.
+  - By eye the plate maps have continents with shapes and inland seas the fractured field never makes, and their mountains lie in broad belts toward one side of a continent, not in a massif at its middle. The belts are 500 to 1,500 km wide and broken into blobs.
+  - Starting islands: 12.8 a map from the fractured field, and 6 to 9 from the plate model.
+  - An experiment, not kept: crust that floats was taken from its plate once it lay more than 200 km under another, and its rock piled on the plate above. The high ground then runs in narrow arcs along the margins, which is the shape wanted. But the piles have no limit (239 km high at 300 Myr), a continent that keeps converging is consumed (land falls to 0.19 of the sphere by 500 Myr), and through hamwold the gain is visible but modest. It would need erosion to spread the piles, and something to stop continents converging once they have met. The patch is in `tmp/collision-limit-experiment.patch` of the checkout it was made in.
 - **How long to run.** Whether maps are best at one supercontinent cycle, several, or part of one is a question for milestone 4.
 
 ## Licence and attribution

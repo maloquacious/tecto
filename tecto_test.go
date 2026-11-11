@@ -184,7 +184,8 @@ func TestGenerateAtZeroDoesNotRunThePlates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := r.Summary; s.Plates != 0 || s.OverlapFraction != 0 || s.Continental != (Budget{}) {
+	if s := r.Summary; s.Plates != 0 || s.OverlapFraction != 0 || s.Continental != (Budget{}) ||
+		s.HighGroundToMarginKm != 0 || s.LandToMarginKm != 0 || s.HighGroundElongation < 1 {
 		t.Errorf("a run of no time reports plates: %+v", s)
 	}
 }
@@ -240,6 +241,10 @@ func TestGenerateWithPlates(t *testing.T) {
 		}
 		if !slices.IsSorted([]float64{s.Min, s.P5, s.P25, s.P50, s.P75, s.P95, s.Max}) {
 			t.Errorf("seed %d: percentiles out of order: %+v", seed, s)
+		}
+		if !(s.HighGroundElongation >= 1 && s.HighGroundToMarginKm >= 0 && s.LandToMarginKm > 0) {
+			t.Errorf("seed %d: high ground %v times as long as wide, %v km from a margin, and land %v km",
+				seed, s.HighGroundElongation, s.HighGroundToMarginKm, s.LandToMarginKm)
 		}
 
 		// A very short run moves nothing far.
