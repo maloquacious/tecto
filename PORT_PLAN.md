@@ -200,7 +200,7 @@ The two measures are computed by a test helper and reported in the run summary, 
 ## Milestones
 
 Each one ends with something that runs.
-Milestones 1, 2, and 3 are done.
+Milestones 1 to 4 are done. The decision at milestone 4 was to go on.
 
 1. **The pipe.** Grid, lookups, initial crust, isostasy, sea level, rotation, sampling, file, and PNG.
    Hamwold gains a way to use `tecto`'s heights in place of `fracture`, behind a flag.

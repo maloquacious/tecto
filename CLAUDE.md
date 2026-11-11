@@ -26,7 +26,8 @@ Its one customer is the world map generator in Hāmwold (`github.com/mdhender/ha
 - Milestones 1, 2, and 3 of the plan are in place: the grid, the starting crust, sea level, sampling to the hex map, and plates that are segmented, move, rift, subduct, accrete, and are redrawn every 150 Myr.
   Every cell has crust after every step, and `Generate` reports an account of the continental rock in its summary.
   Milestone 4, the decision point, has been measured twice. The second attempt added three things that make ranges: continents that meet lock together, volcanic arcs rise above subducting ocean floor, and land erodes.
-  The decision itself is the user's, on [issue 5](https://github.com/maloquacious/tecto/issues/5); until it is made the package stays alpha and untagged.
+  The decision, made on 2026-11-10, was to go on: the root package's exported names are now taken as stable, and the alpha label is gone. No version is tagged yet; see WORKFLOW.md for when to tag.
+  Milestone 5, tuning, is next.
 
 ## What it is for
 

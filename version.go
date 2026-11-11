@@ -19,7 +19,6 @@ var (
 		Major:      0,
 		Minor:      7,
 		Patch:      0,
-		PreRelease: "alpha",
 	}
 )
 
