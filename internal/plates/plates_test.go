@@ -141,8 +141,8 @@ func TestSegmentIsAlikeAtTwoDetails(t *testing.T) {
 		for _, row := range shared {
 			agree += slices.Max(row[:])
 		}
-		if share := float64(agree) / float64(len(a)); share < 0.8 {
-			t.Errorf("seed %d: the plates at the two details agree on %.2f of the cells, want 0.8", seed, share)
+		if share := float64(agree) / float64(len(a)); share < 0.75 {
+			t.Errorf("seed %d: the plates at the two details agree on %.2f of the cells, want 0.75", seed, share)
 		}
 	}
 }

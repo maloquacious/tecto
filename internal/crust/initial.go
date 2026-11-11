@@ -53,18 +53,18 @@ func RandomRanks(pos []sphere.Vec3, rng *rand.Rand) []float64 {
 
 // The share of the crust that is ocean floor, and the spread of elevations
 // within the ocean floor and within the continents, in metres relative to
-// sea level. They are Earth's, as tectonics.js gives them.
+// sea level. The spreads are Earth's, as tectonics.js gives them.
 //
-// With ocean floor as six tenths of the crust, 0.38 of the sphere is land,
-// which is near the 0.35 that Hāmwold floods its maps to, so Hāmwold's
-// coast runs close to the model's. With seven tenths the model's land is
-// 0.30, and Hāmwold must make up the rest out of ocean floor: its maps then
-// have a third fewer mountains. With five tenths the model's land is 0.47,
-// and Hāmwold must drown a quarter of it, so its coast is no longer the
-// model's; its maps had somewhat more mountains on the eight seeds tried,
-// and that has not been tried again with the other constants settled.
+// The share is not Earth's, which is six tenths. With five tenths, 0.46 of
+// the sphere is land, and Hāmwold, which floods its maps to 0.35, drowns a
+// quarter of it: the coast is then Hāmwold's flood line and not the edge of
+// the model's continents. In return its maps have a third more mountains,
+// in ranges as long for their width, on sixteen seeds at 150, 300, and 500
+// Myr. With seven tenths the model's land is 0.30, Hāmwold must make up the
+// rest out of ocean floor, and its maps have a third fewer mountains than
+// with six.
 const (
-	OceanShare         = 0.6
+	OceanShare         = 0.5
 	oceanMeanElevation = -4019.0
 	oceanDeviation     = 1113.0
 	landMeanElevation  = 797.0
@@ -171,7 +171,7 @@ func ColumnAt(elevation float64) Column {
 }
 
 // Initial returns a random starting crust for the cells at pos: continents
-// and ocean floor in Earth's proportions, laid out by RandomRanks. The two
+// and ocean floor in equal shares, laid out by RandomRanks. The two
 // sources of random numbers are used for the layout and for the elevations.
 func Initial(pos []sphere.Vec3, layout, elevations *rand.Rand) []Column {
 	targets := TargetElevations(RandomRanks(pos, layout), elevations)

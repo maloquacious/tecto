@@ -250,8 +250,8 @@ func TestTargetElevations(t *testing.T) {
 			below++
 		}
 	}
-	if share := float64(below) / float64(len(big)); !near(share, 0.6, 0.03) {
-		t.Errorf("%.3f of the cells are ocean floor, want about 0.6", share)
+	if share := float64(below) / float64(len(big)); !near(share, OceanShare, 0.03) {
+		t.Errorf("%.3f of the cells are ocean floor, want about %v", share, OceanShare)
 	}
 }
 

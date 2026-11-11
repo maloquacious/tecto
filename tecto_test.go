@@ -96,10 +96,10 @@ func TestGenerateRanges(t *testing.T) {
 		if float64(lo) < s.Min-0.01 || float64(hi) > s.Max+0.01 {
 			t.Errorf("seed %d: hexes run from %v to %v, cells from %v to %v", seed, lo, hi, s.Min, s.Max)
 		}
-		// The starting crust is 40% continental, and the sea comes a
+		// The starting crust is half continental, and the sea comes a
 		// little way up the continental slope.
-		if s.LandFraction < 0.33 || s.LandFraction > 0.43 {
-			t.Errorf("seed %d: land fraction %.3f, want 0.33 to 0.43", seed, s.LandFraction)
+		if s.LandFraction < 0.42 || s.LandFraction > 0.50 {
+			t.Errorf("seed %d: land fraction %.3f, want 0.42 to 0.50", seed, s.LandFraction)
 		}
 		if s.Landmasses < 1 {
 			t.Errorf("seed %d: no land", seed)
@@ -108,10 +108,10 @@ func TestGenerateRanges(t *testing.T) {
 			t.Errorf("seed %d: percentiles out of order: %+v", seed, s)
 		}
 		for name, c := range map[string]struct{ got, lo, hi float64 }{
-			"lowest":  {s.Min, -4500, -3300},
-			"median":  {s.P50, -3500, -2700},
-			"P75":     {s.P75, 1400, 2300},
-			"P95":     {s.P95, 2500, 3500},
+			"lowest":  {s.Min, -4700, -3300},
+			"median":  {s.P50, -4000, -2700},
+			"P75":     {s.P75, 1200, 2000},
+			"P95":     {s.P95, 2100, 3000},
 			"highest": {s.Max, 3500, 7000},
 		} {
 			if c.got < c.lo || c.got > c.hi {
@@ -121,7 +121,7 @@ func TestGenerateRanges(t *testing.T) {
 	}
 }
 
-// The plates leave the world much as Earth is: the same share of it land,
+// The plates leave the world much as it began: the same share of it land,
 // the ocean floor and the continents at the same levels, and the highest
 // ground higher, where crust has been stacked.
 func TestGenerateRangesWithPlates(t *testing.T) {
@@ -141,11 +141,11 @@ func TestGenerateRangesWithPlates(t *testing.T) {
 			name        string
 			got, lo, hi float64
 		}{
-			{"land fraction", s.LandFraction, 0.33, 0.41},
-			{"lowest height", s.Min, -4200, -3300},
-			{"median height", s.P50, -3300, -2600},
-			{"P75 height", s.P75, 1600, 2400},
-			{"P95 height", s.P95, 2800, 4100},
+			{"land fraction", s.LandFraction, 0.42, 0.50},
+			{"lowest height", s.Min, -4600, -3300},
+			{"median height", s.P50, -3600, -2700},
+			{"P75 height", s.P75, 1500, 2200},
+			{"P95 height", s.P95, 2400, 3700},
 			{"highest height", s.Max, 5000, 20000},
 			{"overlap", s.OverlapFraction, 0, 0.15},
 			// Arcs add rock, a percent or so for each hundred million
@@ -286,8 +286,10 @@ func TestGenerateKeepsLandFromThePoles(t *testing.T) {
 		turned += a
 		plain += b
 	}
-	if turned > plain/2 {
-		t.Errorf("over twenty seeds %v steradians of land are at the poles, and %v with the map not turned: want under half", turned, plain)
+	// The starting crust is nearly half land, most of it in one piece, so
+	// no way of turning the map keeps much of it from the poles.
+	if turned > 0.9*plain {
+		t.Errorf("over twenty seeds %v steradians of land are at the poles, and %v with the map not turned: want under nine tenths", turned, plain)
 	}
 }
 
