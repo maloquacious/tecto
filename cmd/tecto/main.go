@@ -4,8 +4,8 @@
 // Command tecto runs the tecto package and writes the world it returns to a
 // file, for inspection.
 //
-//	tecto --seed 42 --detail 6 --columns 1920 --rows 800 --output world.tecto
-//	tecto --seed 42 --png world.png
+//	tecto --seed 42 --myr 150 --detail 6 --columns 1920 --rows 800 --output world.tecto
+//	tecto --seed 42 --myr 150 --png world.png
 package main
 
 import (
@@ -90,6 +90,10 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 
 	s := r.Summary
 	fmt.Fprintf(stderr, "cells          %d\n", s.Cells)
+	if s.Plates > 0 {
+		fmt.Fprintf(stderr, "plates         %d, with gaps over %.3f of the sphere and overlaps over %.3f\n",
+			s.Plates, s.GapFraction, s.OverlapFraction)
+	}
 	fmt.Fprintf(stderr, "land fraction  %.3f in %d landmasses\n", s.LandFraction, s.Landmasses)
 	fmt.Fprintf(stderr, "height, m      min %.0f, 5%% %.0f, 25%% %.0f, 50%% %.0f, 75%% %.0f, 95%% %.0f, max %.0f\n",
 		s.Min, s.P5, s.P25, s.P50, s.P75, s.P95, s.Max)

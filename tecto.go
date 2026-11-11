@@ -13,6 +13,7 @@ import (
 
 	"github.com/maloquacious/tecto/internal/crust"
 	"github.com/maloquacious/tecto/internal/hexmap"
+	"github.com/maloquacious/tecto/internal/plates"
 	"github.com/maloquacious/tecto/internal/sphere"
 )
 
@@ -34,7 +35,7 @@ type Params struct {
 	// result.
 	Seed uint64
 	// Myr is how long the plates run, in millions of years. Zero gives the
-	// starting crust, and is all that is supported so far.
+	// starting crust.
 	Myr float64
 	// Detail sets the size of the model's cells: the sphere has
 	// 10·4^Detail + 2 of them. At 6 they are about 120 km apart.
@@ -69,6 +70,14 @@ type Summary struct {
 	// the highest, and the heights below which 5%, 25%, 50%, 75%, and 95%
 	// of the cells lie.
 	Min, P5, P25, P50, P75, P95, Max float64
+	// Plates is the number of plates the crust was divided into. It is
+	// zero when the plates were not run.
+	Plates int
+	// GapFraction is the share of the sphere that no plate covered at the
+	// end of the run, and OverlapFraction the share that more than one
+	// did. The model does not yet make new crust where plates part, nor
+	// consume it where they meet, so both grow as the plates run.
+	GapFraction, OverlapFraction float64
 }
 
 func (p Params) withDefaults() (Params, error) {
@@ -86,8 +95,6 @@ func (p Params) withDefaults() (Params, error) {
 		return p, fmt.Errorf("%w: %d rows: want 1 to 16384", ErrInvalidParams, p.Rows)
 	case math.IsNaN(p.Myr) || math.IsInf(p.Myr, 0) || p.Myr < 0:
 		return p, fmt.Errorf("%w: %v million years: want zero or more", ErrInvalidParams, p.Myr)
-	case p.Myr != 0:
-		return p, fmt.Errorf("%w: %v million years: the plates do not move yet, so only zero is supported", ErrInvalidParams, p.Myr)
 	}
 	return p, nil
 }
@@ -118,6 +125,22 @@ func Generate(p Params) (*Result, error) {
 		return nil, err
 	}
 
+	var summary Summary
+	if p.Myr > 0 {
+		world := plates.New(g, columns)
+		if err := world.Advance(p.Myr); err != nil {
+			return nil, err
+		}
+		merged := world.Merge()
+		columns = merged.Columns
+		if err := crust.Check(columns); err != nil {
+			return nil, err
+		}
+		summary.Plates = len(world.Plates)
+		summary.GapFraction = merged.Gap
+		summary.OverlapFraction = merged.Overlap
+	}
+
 	height := crust.Elevations(columns)
 	sea, err := crust.SeaLevel(height, g.Area, crust.OceanMeanDepth)
 	if err != nil {
@@ -133,7 +156,7 @@ func Generate(p Params) (*Result, error) {
 		Columns: p.Columns,
 		Rows:    p.Rows,
 		Heights: hexmap.Sample(g, height, frame, p.Columns, p.Rows),
-		Summary: summarize(g, height, landmasses),
+		Summary: summarize(g, height, landmasses, summary),
 	}, nil
 }
 
@@ -164,7 +187,8 @@ func largestLandmass(g *sphere.Grid, height []float64) (center sphere.Vec3, coun
 	return sum[best].Normalize(), count
 }
 
-func summarize(g *sphere.Grid, height []float64, landmasses int) Summary {
+// summarize fills in the figures of s that come from the heights.
+func summarize(g *sphere.Grid, height []float64, landmasses int, s Summary) Summary {
 	var land float64
 	for cell, h := range height {
 		if h > 0 {
@@ -175,16 +199,10 @@ func summarize(g *sphere.Grid, height []float64, landmasses int) Summary {
 	at := func(share float64) float64 {
 		return sorted[int(share*float64(len(sorted)-1))]
 	}
-	return Summary{
-		Cells:        len(height),
-		LandFraction: land / (4 * math.Pi),
-		Landmasses:   landmasses,
-		Min:          sorted[0],
-		P5:           at(0.05),
-		P25:          at(0.25),
-		P50:          at(0.50),
-		P75:          at(0.75),
-		P95:          at(0.95),
-		Max:          sorted[len(sorted)-1],
-	}
+	s.Cells = len(height)
+	s.LandFraction = land / (4 * math.Pi)
+	s.Landmasses = landmasses
+	s.Min, s.Max = sorted[0], sorted[len(sorted)-1]
+	s.P5, s.P25, s.P50, s.P75, s.P95 = at(0.05), at(0.25), at(0.50), at(0.75), at(0.95)
+	return s
 }

@@ -27,8 +27,6 @@ func TestGenerateRejectsBadParams(t *testing.T) {
 		"negative time":     {Myr: -1},
 		"time not finite":   {Myr: math.Inf(1)},
 		"time not a number": {Myr: math.NaN()},
-		// Until the plates move.
-		"any time at all": {Myr: 100},
 	}
 	for name, p := range bad {
 		if _, err := Generate(p); !errors.Is(err, ErrInvalidParams) {
@@ -178,5 +176,71 @@ func TestLargestLandmassIsInTheMiddle(t *testing.T) {
 	}
 	if middle <= far {
 		t.Errorf("%d of %d hexes are land in the middle of the map, %d on the far side", middle, n, far)
+	}
+}
+
+func TestGenerateAtZeroDoesNotRunThePlates(t *testing.T) {
+	r, err := Generate(small(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := r.Summary; s.Plates != 0 || s.GapFraction != 0 || s.OverlapFraction != 0 {
+		t.Errorf("a run of no time reports plates: %+v", s)
+	}
+}
+
+// The plates drift: a run with time in it is repeatable, differs from the
+// starting crust, and reports how much of the sphere the plates have left
+// bare or doubled.
+func TestGenerateWithPlates(t *testing.T) {
+	for seed := range uint64(5) {
+		start, err := Generate(small(seed))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := small(seed)
+		p.Myr = 150
+		r, err := Generate(p)
+		if err != nil {
+			t.Fatalf("seed %d: %v", seed, err)
+		}
+		again, err := Generate(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(r.Heights, again.Heights) || r.Summary != again.Summary {
+			t.Errorf("seed %d: the same parameters gave different worlds", seed)
+		}
+		if slices.Equal(r.Heights, start.Heights) {
+			t.Errorf("seed %d: 150 million years changed nothing", seed)
+		}
+		for i, h := range r.Heights {
+			if math.IsNaN(float64(h)) || math.IsInf(float64(h), 0) {
+				t.Fatalf("seed %d: hex %d has height %v", seed, i, h)
+			}
+		}
+		s := r.Summary
+		if s.Plates < 2 || s.Plates > 7 {
+			t.Errorf("seed %d: %d plates, want 2 to 7", seed, s.Plates)
+		}
+		if !(s.GapFraction > 0 && s.OverlapFraction > 0 && s.GapFraction+s.OverlapFraction < 1) {
+			t.Errorf("seed %d: gaps over %v of the sphere and overlaps over %v", seed, s.GapFraction, s.OverlapFraction)
+		}
+		if s.LandFraction <= 0 || s.LandFraction >= 1 || s.Landmasses < 1 {
+			t.Errorf("seed %d: land fraction %v in %d landmasses", seed, s.LandFraction, s.Landmasses)
+		}
+		if !slices.IsSorted([]float64{s.Min, s.P5, s.P25, s.P50, s.P75, s.P95, s.Max}) {
+			t.Errorf("seed %d: percentiles out of order: %+v", seed, s)
+		}
+
+		// A very short run moves nothing far, and leaves almost no gaps.
+		p.Myr = 0.5
+		brief, err := Generate(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b := brief.Summary; b.Plates != s.Plates || b.GapFraction > 0.05 || b.OverlapFraction > 0.05 {
+			t.Errorf("seed %d: after half a million years: %+v", seed, b)
+		}
 	}
 }

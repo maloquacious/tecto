@@ -254,3 +254,21 @@ func TestTargetElevations(t *testing.T) {
 		t.Errorf("%.3f of the cells are ocean floor, want about 0.6", share)
 	}
 }
+
+func TestBuoyancy(t *testing.T) {
+	young := NewOcean()
+	if got := young.Buoyancy(); got != 0 {
+		t.Errorf("new ocean crust: buoyancy %v, want 0, since it floats", got)
+	}
+	if got, want := young.Thickness(), OceanCrustThickness; math.Abs(got-want) > 1e-9 {
+		t.Errorf("new ocean crust is %v m thick, want %v", got, want)
+	}
+	old := young
+	old.Age = MaficLifetime
+	if got, want := old.Buoyancy(), Gravity*(MantleDensity-MaficDensityOld); math.Abs(got-want) > 1e-9 {
+		t.Errorf("old ocean crust: buoyancy %v, want %v", got, want)
+	}
+	if got := ColumnAt(500).Buoyancy(); got != 0 {
+		t.Errorf("a continent: buoyancy %v, want 0", got)
+	}
+}

@@ -113,7 +113,14 @@ These are decided now, because nothing obliges the Go to repeat them.
 - **The timestep is internal.** Upstream rifts and subducts one ring of cells per step, whatever the step's length. `tecto` picks its own step so the fastest plate moves less than one cell, and the caller gives only the total time.
 - **Random numbers.** `math/rand/v2` PCG, with a separate stream for each use, derived from the seed. Hamwold can pass a seed drawn from its own domains.
 - **Arithmetic.** `float64` for calculation; `float32` only for stored fields if memory calls for it.
-- **Plate velocity.** Upstream calls its own velocity model mostly wrong, and negates a rotation without knowing why. Implement it as written first, since it is known to produce moving plates, then fix the sign by derivation and test.
+- **Plate velocity.** Upstream calls its own velocity model mostly wrong, and negates a rotation without knowing why.
+  `tecto` keeps its premise, that each sinking cell at a plate's edge would alone draw the plate out across that edge at a slab's terminal speed, and derives the rest.
+  The pulls combine as turning forces about the world's centre, `r × v`, averaged over the cells that pull. Upstream computes `v × r` and negates it, which is the same thing, so its sign was right and its unexplained negation is the order of a cross product.
+  Upstream's second rotation, about the plate's centre of mass, is applied about an axis through the world's centre and so is not the spin it is meant to be. It is replaced by resistance from the mantle under the whole plate: the plate turns at the rate `ω` for which `mean(I − r·rᵀ)·ω` over the plate equals the averaged pull. That gives both the plate's travel and its spin, and a spin no faster than the pulls warrant.
+  Only cells of the plate pull. Upstream also counts the cells just outside it.
+- **Segmentation.** Upstream leaves the ground its flood fills do not reach as one more plate, which may be in several pieces and of any size. `tecto` makes plates of the unclaimed pieces that are large enough, largest first, while there is room, and joins the rest to the plates beside them, so every plate is connected and no smaller than the minimum. Upstream's closing of each plate's outline is left out.
+- **Smoothing.** The pressure field is smoothed by diffusion that keeps the field's mean, with cotangent weights, to a spread of 1,900 km. That is the spread of upstream's thirty rounds of neighbour averaging at detail 4.
+- **Gradient.** The gradient at a cell is a least-squares fit to its neighbours of a slope and a bowl, and is exact for a field that is linear in space. Upstream's is a weighted average of the slopes to each neighbour.
 - **A plain copy bug.** Upstream's `RockColumn` sets `mafic_plutonic` from `mafic_volcanic`, so new ocean crust is doubled. Not repeated.
 - **Smooth cuts.** Upstream spreads each of the initial terrain's cuts over about 40 km, less than a cell, so its field is whole numbers and cells of equal rank are ordered by cell id. `tecto` spreads a cut over 250 km, about the smallest feature it is meant to supply, so the field is continuous at any detail.
 - **Thicknesses, not masses, for the starting crust.** Upstream writes the starting columns as masses reckoned at a density of 2,700 for continental rock, then finds their thickness at 2,600. `tecto` starts from the cited thicknesses and takes the masses from its own densities.
@@ -177,6 +184,7 @@ The two measures are computed by a test helper and reported in the run summary, 
 ## Milestones
 
 Each one ends with something that runs.
+Milestones 1 and 2 are done.
 
 1. **The pipe.** Grid, lookups, initial crust, isostasy, sea level, rotation, sampling, file, and PNG.
    Hamwold gains a way to use `tecto`'s heights in place of `fracture`, behind a flag.
@@ -203,6 +211,7 @@ Sizes, for scale: the upstream model code in scope is about 1,500 lines of JavaS
 - **The starting crust's height.** With upstream's ocean volume, the starting continents float about 1,800 m above the sea and the ocean floor lies about 3,200 m below it, with little in between. Hamwold uses only the order of the heights, so this does not matter to it yet. It is a constant to look at in milestone 5.
 - **One continent at the start.** The starting crust is one large landmass on most seeds, because a sum of cuts through the sphere's centre is dominated by its largest features. The plates are expected to break it up.
 - **The poles.** Hamwold covers everything beyond about 80° with ice. Whether the rotation should also keep large landmasses away from the poles is open.
+- **Runaway plates.** Until milestone 3 nothing makes new ocean floor or consumes old, so the crust only ages and grows denser, and the plates speed up: from 10 to 100 km per million years at the start to over 200 by 150 Myr. After 150 Myr the plates have left a sixth to a half of the sphere bare and doubled up over a sixth to a third of it. Bare ground is given new ocean crust as a placeholder. Whether rifting and subduction bring the speeds back to Earth's is the first thing to measure in milestone 3.
 - **How long to run.** Whether maps are best at one supercontinent cycle, several, or part of one is a question for milestone 4.
 
 ## Licence and attribution

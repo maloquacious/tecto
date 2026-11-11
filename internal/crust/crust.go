@@ -174,3 +174,25 @@ func SeaLevel(elevation, area []float64, meanDepth float64) (float64, error) {
 	}
 	return hi, nil
 }
+
+// Gravity is the pull of the world at its surface, in metres per second
+// squared.
+const Gravity = 9.8
+
+// Buoyancy returns the force with which the mantle pushes the column up,
+// in newtons per cubic metre of crust. It is zero for a column lighter than
+// the mantle, which floats, and below zero for a denser one, which would
+// sink if the crust around it let it.
+func (c Column) Buoyancy() float64 {
+	return min(Gravity*(MantleDensity-c.Density()), 0)
+}
+
+// OceanCrustThickness is the thickness of new ocean crust, in metres: 7,100,
+// give or take 800 (White, McKenzie and O'Nions 1992, "Oceanic crustal
+// thickness from seismic measurements and rare earth element inversions").
+const OceanCrustThickness = 7100.0
+
+// NewOcean returns a column of new ocean crust, of no age.
+func NewOcean() Column {
+	return Column{MaficVolcanic: OceanCrustThickness * MaficDensityYoung}
+}
